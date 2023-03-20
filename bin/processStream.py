@@ -1,5 +1,7 @@
 #!/usr/bin/env python
-
+# conda activate bd4hproject
+# python bin/processStream.py my-stream
+# to do: need to preprocess the data
 """Consumes stream for printing all messages to the console.
 """
 
@@ -10,14 +12,98 @@ import time
 import socket
 from confluent_kafka import Consumer, KafkaError, KafkaException
 
+from pyspark.sql import SparkSession
+from pyspark.pandas.frame import DataFrame
+import numpy as np
+import pandas as pd
+from pyspark.sql.functions import explode, split, from_json, to_json, col, struct
+from pyspark.sql.types import StringType, StructType
+
+# https://stackoverflow.com/questions/72812187/pythonfailed-to-find-data-source-kafkav
+spark = SparkSession.builder.appName('Read CSV File into DataFrame').config("spark.jars.packages", "org.apache.spark:spark-sql-kafka-0-10_2.12:3.1.2").getOrCreate()
+sc = spark.sparkContext
+
 
 def msg_process(msg):
     # Print the current time and the message.
-    time_start = time.strftime("%Y-%m-%d %H:%M:%S")
-    val = msg.value()
-    dval = json.loads(val)
-    print(time_start, dval)
+    # time_start = time.strftime("%Y-%m-%d %H:%M:%S")
+    # val = msg.value()
+    # dval = json.loads(val)
+    # print(time_start, dval)
+    # Using this tutorial https://medium.com/@aman.parmar17/handling-real-time-kafka-data-streams-using-pyspark-8b6616a3a084
+    KAFKA_TOPIC_NAME = 'my-stream'
+    KAFKA_BOOTSTRAP_SERVER = "localhost:29092"
+    sampleDataframe = (
+            spark.
+            readStream
+            .format("kafka")
+            .option("kafka.bootstrap.servers", KAFKA_BOOTSTRAP_SERVER)
+            .option("subscribe", KAFKA_TOPIC_NAME)
+            .option("startingOffsets", "latest")
+            .load()
+        )
+    
+    # Version 1: Just printing the value
+    base_df = sampleDataframe.selectExpr("CAST(value as STRING)", "timestamp")
+    
+    base_df.writeStream.outputMode("append").format("console").start().awaitTermination()
 
+    # Write preprocessing scripts
+
+    # To do: I should start-up another docker that receives the request and runs the prediction.
+    # Send request to API
+
+    # Receive result from API
+
+    # Package result into a new Kafka message 
+
+    # Send it back to Kafka
+
+    # VERSION 2: Some additional processing that that cannot be done.
+
+    sample_schema = (
+        StructType()
+        .add("col_a", StringType())
+    )
+    info_dataframe = base_df.select(
+            from_json(col("value"), sample_schema).alias("sample"), "timestamp"
+        )
+    info_df_fin = info_dataframe.select("sample.*", "timestamp")
+
+    # query_1.writeStream.outputMode("append").format("console").start().awaitTermination(
+
+    # # print last 5 rows of base_df
+    # base_df.show(5, False)
+
+    # spark.streams.awaitAnyTermination()
+    # end version 1 
+
+
+    # Version 3: writing back to kafka
+    # query_1 = info_df_fin
+    # 
+    # result_1 = (
+    #     query_1.selectExpr(
+    #         "CAST(col_a AS STRING)"
+    #     )
+    #     .withColumn("value", to_json(struct("*")).cast("string"),)
+    # )
+    # CHECKPOINT_LOCATION = "/tmp/checkpoint"
+
+    # result2_1 = (
+    #         result_1
+    #         .select("value")
+    #         .writeStream.trigger(processingTime="10 seconds")
+    #         .outputMode("append")
+    #         .format("kafka")
+    #         .option("topic", "DESTINATION_TOPIC")
+    #         .option("kafka.bootstrap.servers", KAFKA_BOOTSTRAP_SERVER)
+    #         .option("checkpointLocation", CHECKPOINT_LOCATION)
+    #         .start()
+    #         .awaitTermination()
+    # )
+
+    # end version 2
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
@@ -26,7 +112,7 @@ def main():
 
     args = parser.parse_args()
 
-    conf = {'bootstrap.servers': 'localhost:9092',
+    conf = {'bootstrap.servers': 'localhost:29092',
             'default.topic.config': {'auto.offset.reset': 'smallest'},
             'group.id': socket.gethostname()}
 
