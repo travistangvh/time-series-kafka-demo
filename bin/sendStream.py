@@ -22,7 +22,7 @@ import socket
 import pandas as pd
 import wfdb
 print("new version!")
-DATAPATH = 'data' 
+DATAPATH = '/volume/data' 
 WAVEFPATH = DATAPATH + '/waveform/physionet.org/files/mimic3wdb-matched/1.0'
 
 def get_waveform_path(patientid, recordid):
