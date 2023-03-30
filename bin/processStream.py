@@ -4,7 +4,7 @@
 # to do: need to preprocess the data
 """Consumes stream for printing all messages to the console.
 """
-
+import os
 import argparse
 import json
 import sys
@@ -18,7 +18,7 @@ import numpy as np
 import pandas as pd
 from pyspark.sql.functions import explode, split, from_json, to_json, col, struct
 from pyspark.sql.types import StringType, StructType
-
+print("new version!")
 # https://stackoverflow.com/questions/72812187/pythonfailed-to-find-data-source-kafkav
 spark = SparkSession.builder.appName('Read CSV File into DataFrame').config("spark.jars.packages", "org.apache.spark:spark-sql-kafka-0-10_2.12:3.1.2").getOrCreate()
 sc = spark.sparkContext
@@ -32,7 +32,7 @@ def msg_process(msg):
     # print(time_start, dval)
     # Using this tutorial https://medium.com/@aman.parmar17/handling-real-time-kafka-data-streams-using-pyspark-8b6616a3a084
     KAFKA_TOPIC_NAME = 'my-stream'
-    KAFKA_BOOTSTRAP_SERVER = "localhost:29092"
+    KAFKA_BOOTSTRAP_SERVER = "172.18.0.4:29092"
     sampleDataframe = (
             spark.
             readStream
@@ -107,12 +107,12 @@ def msg_process(msg):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('topic', type=str,
+    parser.add_argument('--topic', type=str,
                         help='Name of the Kafka topic to stream.')
 
     args = parser.parse_args()
 
-    conf = {'bootstrap.servers': 'localhost:29092',
+    conf = {'bootstrap.servers': '172.18.0.4:29092',
             'default.topic.config': {'auto.offset.reset': 'smallest'},
             'group.id': socket.gethostname()}
 
@@ -123,6 +123,9 @@ def main():
     try:
         while running:
             consumer.subscribe([args.topic])
+
+            # this script here contains the way to subscribe to multiple topics at the same time:
+            # https://stackoverflow.com/questions/72021148/subsrcibe-to-many-topics-in-kafka-using-python
 
             msg = consumer.poll(1)
             if msg is None:
@@ -148,6 +151,21 @@ def main():
         # Close down consumer to commit final offsets.
         consumer.close()
 
+
+# time-series-kafka-demo-processStream-1  | Traceback (most recent call last):
+# time-series-kafka-demo-processStream-1  |   File "/home/bin/processStream.py", line 23, in <module>
+# time-series-kafka-demo-processStream-1  |     spark = SparkSession.builder.appName('Read CSV File into DataFrame').config("spark.jars.packages", "org.apache.spark:spark-sql-kafka-0-10_2.12:3.1.2").getOrCreate()
+# time-series-kafka-demo-processStream-1  |   File "/usr/local/lib/python3.9/site-packages/pyspark/sql/session.py", line 269, in getOrCreate
+# time-series-kafka-demo-processStream-1  |     sc = SparkContext.getOrCreate(sparkConf)
+# time-series-kafka-demo-processStream-1  |   File "/usr/local/lib/python3.9/site-packages/pyspark/context.py", line 483, in getOrCreate
+# time-series-kafka-demo-processStream-1  |     SparkContext(conf=conf or SparkConf())
+# time-series-kafka-demo-processStream-1  |   File "/usr/local/lib/python3.9/site-packages/pyspark/context.py", line 195, in __init__
+# time-series-kafka-demo-processStream-1  |     SparkContext._ensure_initialized(self, gateway=gateway, conf=conf)
+# time-series-kafka-demo-processStream-1  |   File "/usr/local/lib/python3.9/site-packages/pyspark/context.py", line 417, in _ensure_initialized
+# time-series-kafka-demo-processStream-1  |     SparkContext._gateway = gateway or launch_gateway(conf)
+# time-series-kafka-demo-processStream-1  |   File "/usr/local/lib/python3.9/site-packages/pyspark/java_gateway.py", line 106, in launch_gateway
+# time-series-kafka-demo-processStream-1  |     raise RuntimeError("Java gateway process exited before sending its port number")
+# time-series-kafka-demo-processStream-1  | RuntimeError: Java gateway process exited before sending its port number
 
 if __name__ == "__main__":
     main()

@@ -127,3 +127,18 @@ dmypy.json
 
 # Pyre type checker
 .pyre/
+
+*.gzip
+*.csv
+*.csv.gz
+*.zip
+*.hea
+*.dat
+*.html
+*.txt
+!data/waveform/physionet.org/files/mimic3wdb-matched/1.0/p00/p000194/*
+Dockerfile copy
+Dockerfile copy 2
+Dockerfile copy 3
+notes.sh
+*.jpeg

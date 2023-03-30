@@ -3,9 +3,14 @@
 # docker compose run 
 # conda activate bd4hproject
 # python bin/sendStream.py my-stream
+
+# the idea here is that I can spin up multiple instances of this.
+# each of the spinned up instance can represent one type of machine, sending one signal. 
+# in total, we will have 7 machines. 
 """Generates a stream to Kafka from a time series csv file.
 """
-
+import os
+import subprocess
 import argparse
 import csv
 import json
@@ -16,8 +21,8 @@ from confluent_kafka import Producer
 import socket
 import pandas as pd
 import wfdb
-
-DATAPATH = '/Users/michaelscott/bd4h/project/data' 
+print("new version!")
+DATAPATH = 'data' 
 WAVEFPATH = DATAPATH + '/waveform/physionet.org/files/mimic3wdb-matched/1.0'
 
 def get_waveform_path(patientid, recordid):
@@ -45,7 +50,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     # parser.add_argument('filename', type=str,
     #                     help='Time series csv file.')
-    parser.add_argument('topic', type=str,
+    parser.add_argument('--topic', type=str,
                         help='Name of the Kafka topic to stream.')
     parser.add_argument('--speed', type=float, default=1, required=False,
                         help='Speed up time series by a given multiplicative factor.')
@@ -54,7 +59,7 @@ def main():
     topic = args.topic
     p_key = "stg" # args.filename
 
-    conf = {'bootstrap.servers': "localhost:29092",
+    conf = {'bootstrap.servers': "172.18.0.4:29092",
             'client.id': socket.gethostname()}
     producer = Producer(conf)
 
