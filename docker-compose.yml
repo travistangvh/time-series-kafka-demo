@@ -39,7 +39,7 @@ services:
         ipv4_address: 172.18.0.4
 
   processstream:
-    image: btctothemoonz/travisnkento:0.0.2
+    image: btctothemoonz/travisnkento:0.0.5
     command: >
       bash -c "python ../volume/bin/processStream.py --topic my-stream"
     volumes:
@@ -51,7 +51,7 @@ services:
         ipv4_address: 172.18.0.5
 
   sendstream:
-    image: btctothemoonz/travisnkento:0.0.2
+    image: btctothemoonz/travisnkento:0.0.5
     command: >
       bash -c "python ../volume/bin/sendStream.py --speed 10 --topic my-stream"
     volumes:
