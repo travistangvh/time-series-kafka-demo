@@ -52,7 +52,7 @@ def get_waveform_path(patientid, recordid):
 # spark = SparkSession.builder.appName('Read CSV File into DataFrame').config("spark.jars.packages", "org.apache.spark:spark-sql-kafka-0-10_2.12:3.1.2").getOrCreate()
 # sc = spark.sparkContext
 
-def msg_process(msg, server, topic):
+def msg_process(server, topic):
     # Print the current time and the message.
     # time_start = time.strftime("%Y-%m-%d %H:%M:%S")
     # val = msg.value()
@@ -144,6 +144,8 @@ def main():
 
     consumer = Consumer(consumer_conf)
 
+    query = msg_process(consumer_conf['bootstrap.servers'], args.model_call_topic)
+
     producer_conf = {
         'bootstrap.servers': '172.18.0.4:29092',
             'client.id': socket.gethostname(),
@@ -190,6 +192,7 @@ def main():
 
                 data=msg.value().decode('utf-8')
                 print(data)
+                
             model_response = {
                 'user_id': 'a',
                 'user_name': 'b'
@@ -200,6 +203,7 @@ def main():
                 
 
     except KeyboardInterrupt:
+        query.stop()
         pass
 
     finally:

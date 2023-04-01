@@ -18,11 +18,37 @@ import numpy as np
 import pandas as pd
 from pyspark.sql.functions import explode, split, from_json, to_json, col, struct
 from pyspark.sql.types import StringType, StructType
+
+from pyspark.sql.functions import col, lower
+from pyspark.sql.types import StructField, StructType, StringType
+from pyspark.sql.streaming import DataStreamWriter, StreamingQuery
+
+# Define the function to preprocess and send the data to Kafka
+def preprocess_and_send_to_kafka(batch_df, batch_id):
+    producer_conf = {
+    'kafka.bootstrap.servers': '172.18.0.4:29092',
+        'client.id': socket.gethostname(),
+        'acks':'all', # continuously prints ack every time a message is sent. but slows process down. 
+        'retries':5
+}
+    print('preprocess_and_send_to_kafka called/')
+    # Preprocess the data
+    preprocessed_df = batch_df #.select(lower(col("value")).alias("value_lower"))
+    preprocessed_df.printSchema() 
+    print(producer_conf) 
+    # Send the preprocessed data to Kafka
+    # Todo: Change topic hardcoding 
+    preprocessed_df.write.format("kafka")\
+        .options(**producer_conf)\
+        .option("topic", "call-stream")\
+        .option("value.serializer", "org.apache.kafka.common.serialization.StringSerializer")\
+        .option("key.serializer", "org.apache.kafka.common.serialization.StringSerializer")\
+        .save()
+    
 print("new version!")
 # https://stackoverflow.com/questions/72812187/pythonfailed-to-find-data-source-kafkav
 spark = SparkSession.builder.appName('Read CSV File into DataFrame').config("spark.jars.packages", "org.apache.spark:spark-sql-kafka-0-10_2.12:3.1.2").getOrCreate()
 sc = spark.sparkContext
-
 
 def msg_process(server, topic):
     # Print the current time and the message.
@@ -46,7 +72,13 @@ def msg_process(server, topic):
     
     # base_df.writeStream.outputMode("append").format("console").start().awaitTermination()
 
-    query = base_df.writeStream.outputMode("append").format("console").trigger(processingTime='10 seconds').start()
+    # query = base_df.writeStream.outputMode("append").format("console").trigger(processingTime='10 seconds').start()
+
+    # Write the preprocessed DataFrame to Kafka
+    kafka_writer: DataStreamWriter = base_df.writeStream.foreachBatch(preprocess_and_send_to_kafka)
+    kafka_query: StreamingQuery = kafka_writer.start()
+
+    kafka_query.awaitTermination()
 
     # Write preprocessing scripts
 
@@ -61,14 +93,14 @@ def msg_process(server, topic):
 
     # VERSION 2: Some additional processing that that cannot be done.
 
-    sample_schema = (
-        StructType()
-        .add("col_a", StringType())
-    )
-    info_dataframe = base_df.select(
-            from_json(col("value"), sample_schema).alias("sample"), "timestamp"
-        )
-    info_df_fin = info_dataframe.select("sample.*", "timestamp")
+    # sample_schema = (
+    #     StructType()
+    #     .add("col_a", StringType())
+    # )
+    # info_dataframe = base_df.select(
+    #         from_json(col("value"), sample_schema).alias("sample"), "timestamp"
+    #     )
+    # info_df_fin = info_dataframe.select("sample.*", "timestamp")
 
     # query_1.writeStream.outputMode("append").format("console").start().awaitTermination(
 
@@ -104,6 +136,7 @@ def msg_process(server, topic):
     # )
 
     # end version 2
+    # return query, kafka_query
 
 def acked(err, msg):
     if err is not None:
@@ -134,13 +167,14 @@ def main():
             'default.topic.config': {'auto.offset.reset': 'smallest'},
             'group.id': socket.gethostname()}
     
-    query = msg_process(consumer_conf['bootstrap.servers'], args.preprocessing_topic)
+    query, kafka_query = msg_process(consumer_conf['bootstrap.servers'], args.preprocessing_topic)
     
     # Define Kafka producer configuration
     producer_conf = {
         'bootstrap.servers': '172.18.0.4:29092',
             'client.id': socket.gethostname(),
-            'acks':'all' # continuously prints ack every time a message is sent. but slows process down. 
+            'acks':'all', # continuously prints ack every time a message is sent. but slows process down. 
+            'retries':5
     }
     consumer = Consumer(consumer_conf)
     
@@ -173,18 +207,19 @@ def main():
                     raise KafkaException(msg.error())
                     break
             else:
-                sys.stderr.write(f'Received message from {msg.topic()}: {msg.value().decode("utf-8")}')
-                # query = msg_process(msg, consumer_conf['bootstrap.servers'], args.preprocessing_topic)
-                data={
-                    'user_id': 'a',
-                    'user_name': 'b'
-                    }
-                producer.produce(args.model_call_topic, key = 'patientid', value = json.dumps(data).encode('utf-8'), callback=acked)
-                producer.poll(1)
+                pass
+                # sys.stderr.write(f'Received message from {msg.topic()}: {msg.value().decode("utf-8")}')
+                # This works, but commenting out because this is not the pattern that we want
+                # data={
+                #     'user_id': 'a',
+                #     'user_name': 'b'
+                #     }
+                # producer.produce(args.model_call_topic, key = 'patientid', value = json.dumps(data).encode('utf-8'), callback=acked)
+                # producer.poll(1)
 
-                # Flush any pending messages in the producer buffer
-                producer.flush()
-
+                # # Flush any pending messages in the producer buffer
+                # producer.flush()
+                # End this works
     except KeyboardInterrupt:
         query.stop()
         pass
