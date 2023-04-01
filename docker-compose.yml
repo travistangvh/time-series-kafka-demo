@@ -28,6 +28,8 @@ services:
       - KAFKA_LISTENER_SECURITY_PROTOCOL_MAP=PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
       - KAFKA_INTER_BROKER_LISTENER_NAME=PLAINTEXT
       - KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR=1
+      # - KAFKA_LOG4J_LOGGERS="kafka.controller=TRACE,kafka.request.logger=ERROR" # change kafka.request.logger=WARN for debugging
+      - KAFKA_LOG4J_ROOT_LOGLEVEL=ERROR
       # - KAFKA_AUTO_CREATE_TOPICS_ENABLE=true
     ports:
       - "29092:29092"
@@ -39,53 +41,49 @@ services:
         ipv4_address: 172.18.0.4
 
   processstream:
-    image: btctothemoonz/travisnkento:0.0.5
+    image: btctothemoonz/travisnkento:0.0.6
     command: >
-      bash -c "python ../volume/bin/processStream.py --topic my-stream"
+      bash -c "python ../volume/bin/processStream.py --preprocessing-topic preprocessing-stream --model-call-topic call-stream --model-response-topic response-stream"
     volumes:
       - '$PWD:/volume'
     ports:
       - '9042:9042'
+    depends_on:
+      - kafka
+    restart: on-failure
     networks:
       datapipeline:
         ipv4_address: 172.18.0.5
 
   sendstream:
-    image: btctothemoonz/travisnkento:0.0.5
+    image: btctothemoonz/travisnkento:0.0.6
     command: >
-      bash -c "python ../volume/bin/sendStream.py --speed 10 --topic my-stream"
+      bash -c "python ../volume/bin/sendStream.py --speed 10 --preprocessing-topic preprocessing-stream"
     volumes:
       - '$PWD:/volume' #so it turns out this line is causing the problem before. 
                       #previously, all the "home" is replaced because of the conflict in name
     ports:
       - '8080:8080'
-    # depends_on:
-    #   - processstream
+    depends_on:
+      - processstream
+    restart: on-failure
     networks:
       datapipeline:
         ipv4_address: 172.18.0.2
 
+  deeplearning:
+    image: btctothemoonz/travisnkento:0.0.6
+    command: >
+      bash -c "cd ../mount && python bin/evaluate_torch.py --model-call-topic call-stream --model-response-topic response-stream"
+    volumes:
+      - '$PWD:/mount' 
+    ports:
+      - '8081:8081'
+    depends_on:
+      - processstream
 
-  # sendStream:
-  #   # image: btctothemoonz/travisnkento
-  #   build: .
-  #   network_mode: "host"        
-  #   env_file: .env
-  #   # environment:
-  #   #   - PYTHONPATH=${PYTHONPATH}
-  #   volumes:
-  #     - '$PWD:/home' # Maps current working directory to the /home 
-  #   command: >
-  #     python bin/sendStream.py data/data.csv my-stream --speed 10
-
-  # processStream:
-  #   # image: btctothemoonz/travisnkento
-  #   build: .
-  #   network_mode: "host"    
-  #   env_file: .env
-  #   environment:
-  #     - PYTHONPATH=${PYTHONPATH}
-  #   volumes:
-  #     - '$PWD:/home' # Maps current working directory to the /home 
-  #   command: >
-  #     python bin/processStream.py my-stream
+    restart: on-failure
+    networks:
+      datapipeline:
+        ipv4_address: 172.18.0.7
+        

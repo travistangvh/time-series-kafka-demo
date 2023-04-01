@@ -10,7 +10,7 @@ import json
 import sys
 import time
 import socket
-from confluent_kafka import Consumer, KafkaError, KafkaException
+from confluent_kafka import Consumer, KafkaError, KafkaException, Producer
 
 from pyspark.sql import SparkSession
 from pyspark.pandas.frame import DataFrame
@@ -24,21 +24,19 @@ spark = SparkSession.builder.appName('Read CSV File into DataFrame').config("spa
 sc = spark.sparkContext
 
 
-def msg_process(msg):
+def msg_process(server, topic):
     # Print the current time and the message.
     # time_start = time.strftime("%Y-%m-%d %H:%M:%S")
     # val = msg.value()
     # dval = json.loads(val)
     # print(time_start, dval)
     # Using this tutorial https://medium.com/@aman.parmar17/handling-real-time-kafka-data-streams-using-pyspark-8b6616a3a084
-    KAFKA_TOPIC_NAME = 'my-stream'
-    KAFKA_BOOTSTRAP_SERVER = "172.18.0.4:29092"
     sampleDataframe = (
             spark.
             readStream
             .format("kafka")
-            .option("kafka.bootstrap.servers", KAFKA_BOOTSTRAP_SERVER)
-            .option("subscribe", KAFKA_TOPIC_NAME)
+            .option("kafka.bootstrap.servers", server)
+            .option("subscribe", topic)
             .option("startingOffsets", "latest")
             .load()
         )
@@ -46,7 +44,9 @@ def msg_process(msg):
     # Version 1: Just printing the value
     base_df = sampleDataframe.selectExpr("CAST(value as STRING)", "timestamp")
     
-    base_df.writeStream.outputMode("append").format("console").start().awaitTermination()
+    # base_df.writeStream.outputMode("append").format("console").start().awaitTermination()
+
+    query = base_df.writeStream.outputMode("append").format("console").trigger(processingTime='10 seconds').start()
 
     # Write preprocessing scripts
 
@@ -105,30 +105,60 @@ def msg_process(msg):
 
     # end version 2
 
+def acked(err, msg):
+    if err is not None:
+        print("Failed to deliver message: %s: %s" % (str(msg.value()), str(err)))
+    else:
+        print("Message produced: %s" % (str(msg.value())))
+
+def produce_result(producer, output_topic, processed_message):
+    # Produce the processed message to the output topic
+    producer.produce(output_topic, value = json.dumps(str(processed_message)), callback=acked)
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--topic', type=str,
-                        help='Name of the Kafka topic to stream.')
+    parser.add_argument('--preprocessing-topic', 
+                        type=str,
+                        help='Name of the Kafka topic to receive unprocessed data.')
+    parser.add_argument('--model-call-topic', 
+                        type=str, 
+                        help='Name of the Kafka topic to send preprocessed data to machine learning model.')
+    parser.add_argument('--model-response-topic', 
+                        type=str, 
+                        help='Name of the Kafka topic to receive response from machine learning model.')
+
 
     args = parser.parse_args()
 
-    conf = {'bootstrap.servers': '172.18.0.4:29092',
+    consumer_conf = {'bootstrap.servers': '172.18.0.4:29092',
             'default.topic.config': {'auto.offset.reset': 'smallest'},
             'group.id': socket.gethostname()}
-
-    consumer = Consumer(conf)
+    
+    query = msg_process(consumer_conf['bootstrap.servers'], args.preprocessing_topic)
+    
+    # Define Kafka producer configuration
+    producer_conf = {
+        'bootstrap.servers': '172.18.0.4:29092',
+            'client.id': socket.gethostname(),
+            'acks':'all' # continuously prints ack every time a message is sent. but slows process down. 
+    }
+    consumer = Consumer(consumer_conf)
+    
+    # Create Kafka producer for the output topic
+    producer = Producer(producer_conf)
 
     running = True
 
     try:
         while running:
-            consumer.subscribe([args.topic])
+            consumer.subscribe([args.preprocessing_topic, args.model_response_topic])
 
             # this script here contains the way to subscribe to multiple topics at the same time:
             # https://stackoverflow.com/questions/72021148/subsrcibe-to-many-topics-in-kafka-using-python
 
             msg = consumer.poll(1)
             if msg is None:
+                # print(f'Oops, {msg.topic()} message is None')
                 continue
 
             if msg.error():
@@ -138,18 +168,31 @@ def main():
                                      (msg.topic(), msg.partition(), msg.offset()))
                 elif msg.error().code() == KafkaError.UNKNOWN_TOPIC_OR_PART:
                     sys.stderr.write('Topic unknown, creating %s topic\n' %
-                                     (args.topic))
+                                     (msg.topic()))
                 elif msg.error():
                     raise KafkaException(msg.error())
+                    break
             else:
-                msg_process(msg)
+                sys.stderr.write(f'Received message from {msg.topic()}: {msg.value().decode("utf-8")}')
+                # query = msg_process(msg, consumer_conf['bootstrap.servers'], args.preprocessing_topic)
+                data={
+                    'user_id': 'a',
+                    'user_name': 'b'
+                    }
+                producer.produce(args.model_call_topic, key = 'patientid', value = json.dumps(data).encode('utf-8'), callback=acked)
+                producer.poll(1)
+
+                # Flush any pending messages in the producer buffer
+                producer.flush()
 
     except KeyboardInterrupt:
+        query.stop()
         pass
 
     finally:
         # Close down consumer to commit final offsets.
         consumer.close()
+        producer.flush()
 
 
 # time-series-kafka-demo-processStream-1  | Traceback (most recent call last):

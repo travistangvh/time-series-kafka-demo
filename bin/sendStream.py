@@ -50,17 +50,19 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     # parser.add_argument('filename', type=str,
     #                     help='Time series csv file.')
-    parser.add_argument('--topic', type=str,
-                        help='Name of the Kafka topic to stream.')
+    parser.add_argument('--preprocessing-topic', type=str,
+                        help='Name of the Kafka topic to receive unprocessed data.')
     parser.add_argument('--speed', type=float, default=1, required=False,
                         help='Speed up time series by a given multiplicative factor.')
     args = parser.parse_args()
 
-    topic = args.topic
+    # topic = args.topic
     p_key = "stg" # args.filename
 
     conf = {'bootstrap.servers': "172.18.0.4:29092",
-            'client.id': socket.gethostname()}
+            'client.id': socket.gethostname(),
+            'acks':'all' # continuously prints ack every time a message is sent. but slows process down. 
+            }
     producer = Producer(conf)
 
     # rdr = csv.reader(open(args.filename))
@@ -109,9 +111,9 @@ def main():
         # To do: add name
         if val[0] is not None: 
             jresult = json.dumps(str(val[0]))
-            producer.produce(topic, key=p_key, value=jresult, callback=acked)
-
-    producer.flush()
+            producer.produce(args.preprocessing_topic, key=p_key, value=jresult, callback=acked)
+            producer.poll(1)
+            producer.flush()
 
         # except TypeError:
         #     sys.exit()
