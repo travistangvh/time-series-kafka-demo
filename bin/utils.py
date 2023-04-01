@@ -290,5 +290,12 @@ def acked(err, msg):
 def get_producer_config():
 	return {'bootstrap.servers': "172.18.0.4:29092",
             'client.id': socket.gethostname(),
+            'acks':'all', # continuously prints ack every time a message is sent. but slows process down. 
+            'retries':5
+			}
+
+def get_consumer_config():
+	return {'bootstrap.servers': "172.18.0.4:29092",
+            'client.id': socket.gethostname(),
             'acks':'all' # continuously prints ack every time a message is sent. but slows process down. 
             }
