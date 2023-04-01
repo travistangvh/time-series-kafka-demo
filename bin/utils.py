@@ -48,7 +48,6 @@ class AverageMeter(object):
 		self.count += n
 		self.avg = self.sum / self.count
 
-
 def compute_batch_accuracy(output, target):
 	"""Computes the accuracy for a batch"""
 	with torch.no_grad():
@@ -118,7 +117,6 @@ def train(model, device, data_loader, criterion, optimizer, epoch, print_freq=10
 				data_time=data_time, loss=losses, acc=accuracy))
 
 	return losses.avg, accuracy.avg
-
 
 def evaluate(model, device, data_loader, criterion, print_freq=10):
 	batch_time = AverageMeter()
@@ -249,17 +247,6 @@ def evaluate_auc(model, device, data_loader, criterion, print_freq=10):
 					i, len(data_loader), batch_time=batch_time, loss=losses, auc=auc))
 
 	return losses.avg, auc.avg, results
-
-def make_kaggle_submission(list_id, list_prob, path):
-	if len(list_id) != len(list_prob):
-		raise AttributeError("ID list and Probability list have different lengths")
-
-	os.makedirs(path, exist_ok=True)
-	output_file = open(os.path.join(path, 'my_predictions.csv'), 'w')
-	output_file.write("SUBJECT_ID,MORTALITY\n")
-	for pid, prob in zip(list_id, list_prob):
-		output_file.write("{},{}\n".format(pid, prob))
-	output_file.close()
 
 def load_dataset(x,y):
 	"""

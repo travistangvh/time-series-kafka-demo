@@ -75,7 +75,7 @@ services:
   deeplearning:
     image: btctothemoonz/travisnkento:0.0.6
     command: >
-      bash -c "cd ../volume && python bin/evaluate_torch.py --model-call-topic call-stream --model-response-topic response-stream"
+      bash -c "cd ../volume && python bin/predictStream.py --model-call-topic call-stream --model-response-topic response-stream"
     volumes:
       - '$PWD:/volume'
     ports:
