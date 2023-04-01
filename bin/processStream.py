@@ -7,13 +7,13 @@ import numpy as np
 import pandas as pd
 from pyspark.sql.functions import explode, split, from_json, to_json, col, struct, lower
 from pyspark.sql.streaming import DataStreamWriter, StreamingQuery
-from utils import acked, get_consumer_config, get_producer_config
+from utils import acked, get_consumer_config, get_producer_config, build_spark_session
 
 def main():
     """Create SparkSession.
     Explanation on why the .config(spark.jars.packages) is needed: 
     https://stackoverflow.com/questions/72812187/pythonfailed-to-find-data-source-kafkav"""
-    spark = SparkSession.builder.appName('Read CSV File into DataFrame').config("spark.jars.packages", "org.apache.spark:spark-sql-kafka-0-10_2.12:3.1.2").getOrCreate()
+    spark = build_spark_session()
 
     """Get arguments from command line"""
     parser = argparse.ArgumentParser(description=__doc__)
@@ -75,8 +75,10 @@ def main():
         # Select the value and timestamp (the message is received)
         base_df = df.selectExpr("CAST(value as STRING)", "timestamp")
         
-        # Uncomment this line to see the messages received in the terminal.
-        query = base_df.writeStream.outputMode("append").format("console").trigger(processingTime='10 seconds').start()
+        # to see what "base_df" is like in the stream,
+        # Uncomment base_df.writeStream.outputMode(...)
+        # and comment out base_df.writeStream.foreachBatch(...)
+        # query = base_df.writeStream.outputMode("append").format("console").trigger(processingTime='10 seconds').start()
 
         # Write the preprocessed DataFrame to Kafka in batches.
         kafka_writer: DataStreamWriter = base_df.writeStream.foreachBatch(preprocess_and_send_to_kafka)
@@ -84,13 +86,11 @@ def main():
 
         kafka_query.awaitTermination()
 
-
     msg_process(consumer_conf['bootstrap.servers'], 
                 args.preprocessing_topic)
 
 if __name__ == "__main__":
     main()
-
 
 """Some drafts that can be removed from before.
     # running = True

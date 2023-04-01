@@ -7,7 +7,10 @@ from torch.utils.data import TensorDataset, Dataset
 import torch.nn as nn
 import configparser
 import socket
+from pyspark.sql import SparkSession
 
+def build_spark_session():
+	return SparkSession.builder.appName('Read CSV File into DataFrame').config("spark.jars.packages", "org.apache.spark:spark-sql-kafka-0-10_2.12:3.1.2").getOrCreate()
 
 def get_global_config():
     """Read in all the config variables for the other files to use."""
