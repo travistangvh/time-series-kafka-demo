@@ -29,8 +29,8 @@ services:
       - KAFKA_LISTENER_SECURITY_PROTOCOL_MAP=PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
       - KAFKA_INTER_BROKER_LISTENER_NAME=PLAINTEXT
       - KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR=1
-      # - KAFKA_LOG4J_LOGGERS="kafka.controller=TRACE,kafka.request.logger=ERROR" # change kafka.request.logger=WARN for debugging
-      - KAFKA_LOG4J_ROOT_LOGLEVEL=ERROR
+      - KAFKA_LOG4J_LOGGERS=org.apache.zookeeper=ERROR,org.apache.kafka=ERROR,kafka=ERROR,kafka.cluster=ERROR,kafka.controller=ERROR,kafka.coordinator=ERROR,kafka.log=ERROR,kafka.server=ERROR,kafka.zookeeper=ERROR,state.change.logger=ERROR # Remove this line to enable extension logging
+      # - KAFKA_LOG4J_ROOT_LOGLEVEL=ERROR
       # - KAFKA_AUTO_CREATE_TOPICS_ENABLE=true
     ports:
       - "29092:29092"
@@ -44,7 +44,7 @@ services:
   processstream:
     image: btctothemoonz/travisnkento:0.0.6
     command: >
-      bash -c "python ../volume/bin/processStream.py --preprocessing-topic preprocessing-stream --model-call-topic call-stream --model-response-topic response-stream"
+      bash -c "cd ../volume && python bin/processStream.py --preprocessing-topic preprocessing-stream --model-call-topic call-stream --model-response-topic response-stream"
     volumes:
       - '$PWD:/volume'
     ports:
@@ -59,7 +59,7 @@ services:
   sendstream:
     image: btctothemoonz/travisnkento:0.0.6
     command: >
-      bash -c "python ../volume/bin/sendStream.py --speed 10 --preprocessing-topic preprocessing-stream"
+      bash -c "cd ../volume && python bin/sendStream.py --speed 10 --preprocessing-topic preprocessing-stream"
     volumes:
       - '$PWD:/volume' #so it turns out this line is causing the problem before. 
                       #previously, all the "home" is replaced because of the conflict in name
@@ -75,9 +75,9 @@ services:
   deeplearning:
     image: btctothemoonz/travisnkento:0.0.6
     command: >
-      bash -c "cd ../mount && python bin/evaluate_torch.py --model-call-topic call-stream --model-response-topic response-stream"
+      bash -c "cd ../volume && python bin/evaluate_torch.py --model-call-topic call-stream --model-response-topic response-stream"
     volumes:
-      - '$PWD:/mount' 
+      - '$PWD:/volume'
     ports:
       - '8081:8081'
     depends_on:

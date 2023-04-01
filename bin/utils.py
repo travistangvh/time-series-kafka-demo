@@ -5,6 +5,27 @@ import torch
 import pandas as pd
 from torch.utils.data import TensorDataset, Dataset
 import torch.nn as nn
+import configparser
+import socket
+
+
+def get_global_config():
+    """Read in all the config variables for the other files to use."""
+    config = configparser.ConfigParser()	
+    config.read('config.cfg')
+    config_vars = {
+        "MOUNTPATH": config.get("PATHS", "MOUNTPATH"),
+        "DATAPATH": config.get("PATHS", "DATAPATH"),
+        "MIMICPATH": config.get("PATHS", "MIMICPATH"),
+        "DEMOPATH": config.get("PATHS", "DEMOPATH"),
+        "WAVEFPATH": config.get("PATHS", "WAVEFPATH"),
+        "OUTPUTPATH": config.get("PATHS", "OUTPUTPATH"),
+        "MODELPATH": config.get("PATHS", "MODELPATH"),
+        "USE_CUDA": config.getboolean("SETTINGS", "USE_CUDA"),
+        "NUM_WORKERS": config.getint("SETTINGS", "NUM_WORKERS"),
+        "CHANNEL_NAMES": config.get("SETTINGS", "CHANNEL_NAMES").split(", ")
+    }
+    return config_vars
 
 class AverageMeter(object):
 	"""Computes and stores the average and current value"""
@@ -256,3 +277,18 @@ def load_dataset(x,y):
 	dataset = TensorDataset(data, target.long())
 
 	return dataset
+
+"""
+Utility functions for streaming
+"""
+def acked(err, msg):
+    if err is not None:
+        print("Failed to deliver message: %s: %s" % (str(msg.value()), str(err)))
+    else:
+        print("Message produced: %s" % (str(msg.value())))
+
+def get_producer_config():
+	return {'bootstrap.servers': "172.18.0.4:29092",
+            'client.id': socket.gethostname(),
+            'acks':'all' # continuously prints ack every time a message is sent. but slows process down. 
+            }

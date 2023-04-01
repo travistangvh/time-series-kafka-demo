@@ -1,122 +1,49 @@
-#!/usr/bin/env python
-# run the following:
-# docker compose run 
-# conda activate bd4hproject
-# python bin/sendStream.py my-stream
-
-# the idea here is that I can spin up multiple instances of this.
-# each of the spinned up instance can represent one type of machine, sending one signal. 
-# in total, we will have 7 machines. 
-"""Generates a stream to Kafka from a time series csv file.
-"""
-import os
-import subprocess
+"""Generates a stream to Kafka from a time series csv file."""
 import argparse
-import csv
 import json
-import sys
 import time
 from dateutil.parser import parse
-from confluent_kafka import Producer
-import socket
-import pandas as pd
+
 import wfdb
-print("new version!")
-DATAPATH = '/volume/data' 
-WAVEFPATH = DATAPATH + '/waveform/physionet.org/files/mimic3wdb-matched/1.0'
+from confluent_kafka import Producer
+from utils import get_global_config, get_producer_config, acked
+
+cfg = get_global_config()
 
 def get_waveform_path(patientid, recordid):
-    return WAVEFPATH + f'/{patientid[0:3]}/{patientid}/{recordid}'
-
-patient_path = get_waveform_path('p000194', 'p000194-2112-05-23-14-34n')
-record = wfdb.rdrecord(patient_path)
-record_arr = record.__dict__['p_signal']
-frequency = record.fs # sampling frequency in 1/min
-diff = float(frequency*60) # waiting time in second
-
-# wfdb.plot_wfdb(record=record, title='Record a103l from PhysioNet Challenge 2015') 
-# display(record.__dict__)
-# record_df = pd.DataFrame(record.__dict__['p_signal'])
-
-def acked(err, msg):
-    if err is not None:
-        print("Failed to deliver message: %s: %s" % (str(msg.value()), str(err)))
-    else:
-        print("Message produced: %s" % (str(msg.value())))
-
+    return cfg['WAVEFPATH'] + f'/{patientid[0:3]}/{patientid}/{recordid}'
 
 def main():
-    
+    """Get arguments from command line"""
     parser = argparse.ArgumentParser(description=__doc__)
-    # parser.add_argument('filename', type=str,
-    #                     help='Time series csv file.')
     parser.add_argument('--preprocessing-topic', type=str,
                         help='Name of the Kafka topic to receive unprocessed data.')
     parser.add_argument('--speed', type=float, default=1, required=False,
                         help='Speed up time series by a given multiplicative factor.')
     args = parser.parse_args()
 
-    # topic = args.topic
-    p_key = "stg" # args.filename
+    """Read a patient's waveform data"""
+    patient_path = get_waveform_path('p000194', 'p000194-2112-05-23-14-34n')
+    record = wfdb.rdrecord(patient_path)
+    record_arr = record.__dict__['p_signal'] # Get one of the signals
+    frequency = record.fs # sampling frequency in 1/min
+    diff = float(frequency*60) # waiting time in second
 
-    conf = {'bootstrap.servers': "172.18.0.4:29092",
-            'client.id': socket.gethostname(),
-            'acks':'all' # continuously prints ack every time a message is sent. but slows process down. 
-            }
-    producer = Producer(conf)
+    """Create producer and send to kafka"""
+    producer_conf = get_producer_config()
+    producer = Producer(producer_conf)
 
-    # rdr = csv.reader(open(args.filename))
-    # next(rdr)  # Skip header
-    firstline = True
-
-    # while True:
-
-        # try:
-
-            # if firstline is True:
-            #     line1 = next(rdr, None)
-            #     timestamp, value = line1[0], float(line1[1])
-            #     # Convert csv columns to key value pair
-            #     result = {}
-            #     result[timestamp] = value
-            #     # Convert dict to json as message format
-            #     jresult = json.dumps(result)
-            #     firstline = False
-
-            #     producer.produce(topic, key=p_key, value=jresult, callback=acked)
-
-            # else:
-            #     line = next(rdr, None)
-            #     # d1 = parse(timestamp)
-            #     # d2 = parse(line[0])
-            #     # diff = ((d2 - d1).total_seconds())/args.speed
-            #     time.sleep(diff)
-            #     timestamp, value = line[0], float(line[1])
-            #     result = {}
-            #     result[timestamp] = value
-            #     jresult = json.dumps(result)
-            #     producer.produce(topic, key=p_key, value=jresult, callback=acked)
-
-    for idx,val in enumerate(record_arr):
-        # d1 = parse(timestamp)
-        # d2 = parse(line[0])
-        # diff = ((d2 - d1).total_seconds())/args.speed
-        print(val)
-        print(val[0])
-        time.sleep(diff)
-        # timestamp, value = record_arr[i], float(line[1])
-        # result = {}
-        # result[timestamp] = value
-        # To do: add different values
-        # To do: add name
+    for val in record_arr:
+        # Read in the records and send over to producer.
         if val[0] is not None: 
             jresult = json.dumps(str(val[0]))
-            producer.produce(args.preprocessing_topic, key=p_key, value=jresult, callback=acked)
+            producer.produce(args.preprocessing_topic, 
+                             key='p000194', #Patient ID can be used as the key for the key-value pair. 
+                             value=jresult, 
+                             callback=acked)
             producer.poll(1)
             producer.flush()
-
-        # except TypeError:
-        #     sys.exit()
+        time.sleep(diff)
 
 if __name__ == "__main__":
     main()
