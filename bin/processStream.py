@@ -79,11 +79,11 @@ def main():
         # Uncomment base_df.writeStream.outputMode(...)
         # and comment out base_df.writeStream.foreachBatch(...)
         # query = base_df.writeStream.outputMode("append").format("console").trigger(processingTime='10 seconds').start()
+        # query.await_termination()
 
         # Write the preprocessed DataFrame to Kafka in batches.
         kafka_writer: DataStreamWriter = base_df.writeStream.foreachBatch(preprocess_and_send_to_kafka)
         kafka_query: StreamingQuery = kafka_writer.start()
-
         kafka_query.awaitTermination()
 
     msg_process(consumer_conf['bootstrap.servers'], 
@@ -91,53 +91,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
-"""Some drafts that can be removed from before.
-    # running = True
-
-    # try:
-    #     while running:
-    #         consumer.subscribe([args.preprocessing_topic, args.model_response_topic])
-
-    #         # this script here contains the way to subscribe to multiple topics at the same time:
-    #         # https://stackoverflow.com/questions/72021148/subsrcibe-to-many-topics-in-kafka-using-python
-
-    #         msg = consumer.poll(1)
-    #         if msg is None:
-    #             # print(f'Oops, {msg.topic()} message is None')
-    #             continue
-
-    #         if msg.error():
-    #             if msg.error().code() == KafkaError._PARTITION_EOF:
-    #                 # End of partition event
-    #                 sys.stderr.write('%% %s [%d] reached end at offset %d\n' %
-    #                                  (msg.topic(), msg.partition(), msg.offset()))
-    #             elif msg.error().code() == KafkaError.UNKNOWN_TOPIC_OR_PART:
-    #                 sys.stderr.write('Topic unknown, creating %s topic\n' %
-    #                                  (msg.topic()))
-    #             elif msg.error():
-    #                 raise KafkaException(msg.error())
-    #                 break
-    #         else:
-    #             pass
-    #             # sys.stderr.write(f'Received message from {msg.topic()}: {msg.value().decode("utf-8")}')
-    #             # This works, but commenting out because this is not the pattern that we want
-    #             # data={
-    #             #     'user_id': 'a',
-    #             #     'user_name': 'b'
-    #             #     }
-    #             # producer.produce(args.model_call_topic, key = 'patientid', value = json.dumps(data).encode('utf-8'), callback=acked)
-    #             # producer.poll(1)
-
-    #             # # Flush any pending messages in the producer buffer
-    #             # producer.flush()
-    #             # End this works
-    # except KeyboardInterrupt:
-    #     query.stop()
-    #     pass
-
-    # finally:
-    #     # Close down consumer to commit final offsets.
-    #     consumer.close()
-    #     producer.flush()
-"""
