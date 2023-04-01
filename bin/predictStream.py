@@ -7,9 +7,6 @@ import torch
 from torch import nn
 from models import MyCNN
 from utils import get_global_config, compute_batch_accuracy, compute_batch_auc, acked, get_producer_config, get_consumer_config, build_spark_session
-
-import numpy as np
-import pandas as pd
 from pyspark.sql.functions import explode, split, from_json, to_json, col, struct
 
 cfg = get_global_config()

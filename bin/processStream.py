@@ -2,9 +2,6 @@
 
 import argparse
 from confluent_kafka import Consumer, Producer
-from pyspark.sql import SparkSession
-import numpy as np
-import pandas as pd
 from pyspark.sql.functions import explode, split, from_json, to_json, col, struct, lower
 from pyspark.sql.streaming import DataStreamWriter, StreamingQuery
 from utils import acked, get_consumer_config, get_producer_config, build_spark_session
