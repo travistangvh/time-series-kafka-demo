@@ -142,3 +142,5 @@ Dockerfile copy 2
 Dockerfile copy 3
 notes.sh
 *.jpeg
+data/
+MyCNN2.pth
