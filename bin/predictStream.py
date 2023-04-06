@@ -8,15 +8,64 @@ from torch import nn
 from models import MyCNN
 from utils import get_global_config, compute_batch_accuracy, compute_batch_auc, acked, get_producer_config, get_consumer_config, build_spark_session
 from pyspark.sql.functions import explode, split, from_json, to_json, col, struct
+import pyspark.pandas as ps
+import mysql.connector
+
+
 
 cfg = get_global_config()
+cnx = mysql.connector.connect(user='root', 
+                              password='mauFJcuf5dhRMQrjj',
+                              host='172.18.0.8', 
+                              database='mydb')
+
+# Define a function to write each batch of streaming data to MySQL
+def write_to_mysql(batch_df, batch_id):
+    cursor = cnx.cursor()
+
+    # Convert the batch DataFrame to a list of tuples
+    data = [tuple(row) for row in batch_df.collect()]
+
+    # Construct the SQL query to insert the data into MySQL
+    query = "INSERT INTO mytable (col1, col2) VALUES (%s, %s)"
+
+    # Insert the data into MySQL using a prepared statement
+    cursor.executemany(query, data)
+    cnx.commit()
+
 
 def get_waveform_path(patientid, recordid):
     return cfg['WAVEFPATH'] + f'/{patientid[0:3]}/{patientid}/{recordid}'
-
+# Replace with this
+# https://pytorch.org/docs/stable/data.html#torch.utils.data.IterableDataset
 def run_model():
     """A dummy model that takes uses a dummy model and produces dummy predictions."""
     print('Starting prediction...')
+
+    # Get date
+    subject_id = 44083
+    # read this using datetime.datetime
+    cur_time = '2112-05-04-19-50'
+    # extract date from string
+    from datetime import datetime
+
+    date_str = '2112-05-04-19-50'
+    format_str = '%Y-%m-%d-%H-%M'
+
+    # Use format string '%Y-%m-%d-%H-%M' to create a datetime.datetime object
+    dt = datetime.strptime(date_str, format_str)
+
+    # Convert datetime.datetime to numpy.datetime64
+    waveform_date = np.datetime64(dt)
+
+    # Get patient age
+    patients_df = ps.read_csv(f'{cfg["MIMICPATH"]}/PATIENTS.csv.gz', usecols = ['SUBJECT_ID','DOB'])
+    bday = patients_df.query("SUBJECT_ID==44083")['DOB']
+    birthday_date = bday.values[0]
+
+    time_diff = np.timedelta64(waveform_date - birthday_date, 's')
+    age = time_diff.astype('float') / (3600 * 24 * 365.25)
+    
 
     patient_path = get_waveform_path('p044083', 'p044083-2112-05-04-19-50n')
 
@@ -40,12 +89,13 @@ def run_model():
     y = record_df['y'].astype(np.float32).values
     y = np.random.randint(low=0, high=2, size=record_arr.shape[0]).squeeze()
     y.shape
+    age_arr = np.random.randint(30, 60, size=record_arr.shape[0]).squeeze() * 1.0
 
     model = torch.load(cfg['MODELPATH'])
     print('Model loaded')
-    test_dataset = load_dataset(x[1500:],y[1500:])
+    test_dataset = load_dataset(x[1500:],age_arr[1500:],y[1500:])
     test_loader = torch.utils.data.DataLoader(test_dataset, batch_size=1600, shuffle=False, num_workers=cfg['NUM_WORKERS'])
-    criterion = nn.CrossEntropyLoss()
+    criterion = nn.BCEWithLogitsLoss()
     device = torch.device("cuda" if cfg['USE_CUDA'] and torch.cuda.is_available() else "cpu")
     losses_avg, accuracy_avg, results= evaluate(model, device, test_loader, criterion, print_freq=10)
 
@@ -109,19 +159,35 @@ def main():
         # Select the value and timestamp (the message is received)
         base_df = df.selectExpr("CAST(value as STRING)", "timestamp")
         
-        # to see what "base_df" is like in the stream,
-        # Uncomment base_df.writeStream.outputMode(...)
-        # and comment out base_df.writeStream.foreachBatch(...)
-        query = base_df.writeStream.outputMode("append").format("console").trigger(processingTime='10 seconds').start()
-        query.awaitTermination()
+        ## to see what "base_df" is like in the stream,
+        ## Uncomment base_df.writeStream.outputMode(...)
+        ## and comment out base_df.writeStream.foreachBatch(...)
+        # query = base_df.writeStream.outputMode("append").format("console").trigger(processingTime='10 seconds').start()
+        # query.awaitTermination()
 
-        # Write the preprocessed DataFrame to Kafka in batches.
+        ## Write the preprocessed DataFrame to Kafka in batches.
         # kafka_writer: DataStreamWriter = base_df.writeStream.foreachBatch(preprocess_and_send_to_kafka)
         # kafka_query: StreamingQuery = kafka_writer.start()
         # kafka_query.awaitTermination()
 
+        # Write the streaming data to MySQL using foreachBatch
+        query = base_df.writeStream.foreachBatch(write_to_mysql).trigger(processingTime='10 seconds').start()
+        # query.awaitTermination()
+
         # The model needs to be called to store the data
         run_model()
+
+
+        # Create the first cursor for executing queries on the 'table1' table
+        cursor1 = cnx.cursor()
+        query1 = 'SELECT * FROM mytable'
+        cursor1.execute(query1)
+        rows1 = cursor1.fetchall()
+        print('Rows from table1:')
+        for row in rows1:
+            print(row)
+        
+        query.awaitTermination()
 
         return query
 

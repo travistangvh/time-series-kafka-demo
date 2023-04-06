@@ -10,3 +10,4 @@ wfdb
 # pyspark[sql]
 # pyhealth
 pyarrow
+mysql-connector-python==8.0.32

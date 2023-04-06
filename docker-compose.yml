@@ -42,11 +42,12 @@ services:
         ipv4_address: 172.18.0.4
 
   processstream:
-    image: btctothemoonz/travisnkento:0.0.6
+    image: btctothemoonz/travisnkento:0.0.7
     command: >
       bash -c "cd ../volume && python bin/processStream.py --preprocessing-topic preprocessing-stream --model-call-topic call-stream --model-response-topic response-stream"
     volumes:
       - '$PWD:/volume'
+      - '$PWD/jars:/root/.ivy2/jars'
     ports:
       - '9042:9042'
     depends_on:
@@ -57,12 +58,13 @@ services:
         ipv4_address: 172.18.0.5
 
   sendstream:
-    image: btctothemoonz/travisnkento:0.0.6
+    image: btctothemoonz/travisnkento:0.0.7
     command: >
       bash -c "cd ../volume && python bin/sendStream.py --speed 10 --preprocessing-topic preprocessing-stream"
     volumes:
       - '$PWD:/volume' #so it turns out this line is causing the problem before. 
                       #previously, all the "home" is replaced because of the conflict in name
+      - '$PWD/jars:/root/.ivy2/jars'
     ports:
       - '8080:8080'
     depends_on:
@@ -73,18 +75,43 @@ services:
         ipv4_address: 172.18.0.2
 
   deeplearning:
-    image: btctothemoonz/travisnkento:0.0.6
+    image: btctothemoonz/travisnkento:0.0.7
     command: >
       bash -c "cd ../volume && python bin/predictStream.py --model-call-topic call-stream --model-response-topic response-stream"
     volumes:
       - '$PWD:/volume'
+      - '$PWD/jars:/root/.ivy2/jars'
     ports:
       - '8081:8081'
     depends_on:
       - processstream
-
+      - db
     restart: on-failure
     networks:
       datapipeline:
         ipv4_address: 172.18.0.7
-        
+    
+  db:
+    image: mysql:8.0
+    cap_add:
+      - SYS_NICE
+    restart: always
+    environment:
+      - MYSQL_DATABASE=mysql # use default; no need to create specify MYSQL_DATABASE
+      - MYSQL_ROOT_PASSWORD=mauFJcuf5dhRMQrjj
+    ports:
+      - '3306:3306'
+    volumes:
+      # - '$PWD/db:/var/lib/mysql'
+      - '$PWD/db:/docker-entrypoint-initdb.d/'
+      - '$PWD:/volume'
+    restart: on-failure
+    networks:
+      datapipeline:
+        ipv4_address: 172.18.0.8
+
+volumes:
+  db:
+    driver: local
+
+  # use docker compose down -v to remove all database

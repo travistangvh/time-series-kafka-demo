@@ -1,6 +1,5 @@
 import torch
 import torch.nn as nn
-
 class MyCNN(nn.Module):
 	
 	def __init__(self):
@@ -13,9 +12,11 @@ class MyCNN(nn.Module):
 
 		self.dropout = nn.Dropout(0.5)
 		self.lstm = nn.LSTM(input_size = 27, hidden_size=16, num_layers=2)
-		self.out = nn.Linear(in_features=16, out_features=2)
+		self.out = nn.Linear(in_features=16, out_features=1, bias=True)
 
-	def forward(self, x):
+		self.age_fn = nn.Linear(in_features=1, out_features=1, bias=True)
+
+	def forward(self, x, age):
 		x = torch.tanh(self.conv1(x))
 		x = self.pool(x)
 		x = torch.tanh(self.conv2(x))
@@ -23,6 +24,7 @@ class MyCNN(nn.Module):
 		x = self.dropout(x)
 		x = x.view(-1, 27)
 		x,_ = self.lstm(x)
-		x = self.out(x)
-		# x = self.out(x)
+		x = torch.sigmoid(self.out(x))
+		age_scale = self.age_fn(age.unsqueeze(1))
+		x = (x*age_scale).squeeze()
 		return x

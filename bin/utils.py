@@ -10,7 +10,35 @@ import socket
 from pyspark.sql import SparkSession
 
 def build_spark_session():
-	return SparkSession.builder.appName('Read CSV File into DataFrame').config("spark.jars.packages", "org.apache.spark:spark-sql-kafka-0-10_2.12:3.1.2").getOrCreate()
+	# Option 1. Download the following files into ./jars/ from Maven repo
+	# So there is no need to download them everytime it starts
+	# Ensure these files into './jars/' from Github repo
+	# jars_dir = '/root/.ivy2/jars/'
+	# jars = ','.join([f'{jars_dir}{jar}' for jar in [
+	# 	'com.github.luben_zstd-jni-1.4.8-1.jar',
+	# 	'commons-pool2-2.6.2.jar',
+	# 	'kafka-clients-2.6.0.jar',
+	# 	'lz4-java-1.7.1.jar',
+	# 	'org.apache.commons_commons-pool2-2.6.2.jar',
+	# 	'org.apache.kafka_kafka-clients-2.6.0.jar',
+	# 	'org.apache.spark_spark-sql-kafka-0-10_2.12-3.1.2.jar',
+	# 	'org.apache.spark_spark-token-provider-kafka-0-10_2.12-3.1.2.jar',
+	# 	'org.lz4_lz4-java-1.7.1.jar',
+	# 	'org.slf4j_slf4j-api-1.7.30.jar',
+	# 	'org.spark-project.spark_unused-1.0.0.jar',
+	# 	'org.xerial.snappy_snappy-java-1.1.8.2.jar',
+	# 	'slf4j-api-1.7.30.jar',
+	# 	'snappy-java-1.1.8.2.jar',
+	# 	'spark-sql-kafka-0-10_2.12-3.1.2.jar',
+	# 	'spark-token-provider-kafka-0-10_2.12-3.1.2.jar',
+	# 	'unused-1.0.0.jar',
+	# 	'zstd-jni-1.4.8-1.jar'
+	# ]])
+	# return SparkSession.builder.appName('app').config('spark.jars', jars).getOrCreate()
+
+	# #Option 2: Dynamically download file (slower but works)
+	return SparkSession.builder.appName('app').config("spark.jars.packages", "org.apache.spark:spark-sql-kafka-0-10_2.12:3.1.2").getOrCreate()
+
 
 def get_global_config():
     """Read in all the config variables for the other files to use."""
@@ -51,9 +79,12 @@ class AverageMeter(object):
 def compute_batch_accuracy(output, target):
 	"""Computes the accuracy for a batch"""
 	with torch.no_grad():
-
 		batch_size = target.size(0)
-		_, pred = output.max(1)
+		# For multiple categories
+		# _, pred = output.max(1)
+
+		# For two categories
+		pred = torch.round(torch.sigmoid(output))
 		correct = pred.eq(target).sum()
 
 		return correct * 100.0 / batch_size
@@ -82,7 +113,7 @@ def train(model, device, data_loader, criterion, optimizer, epoch, print_freq=10
 	model.train()
 
 	end = time.time()
-	for i, (input, target) in enumerate(data_loader):
+	for i, (input, age, target) in enumerate(data_loader):
 		# measure data loading time
 		data_time.update(time.time() - end)
 
@@ -90,10 +121,11 @@ def train(model, device, data_loader, criterion, optimizer, epoch, print_freq=10
 			input = tuple([e.to(device) if type(e) == torch.Tensor else e for e in input])
 		else:
 			input = input.to(device)
+		age = age.to(device)
 		target = target.to(device)
 
 		optimizer.zero_grad()
-		output = model(input)
+		output = model(input, age)
 		loss = criterion(output, target)
 		assert not np.isnan(loss.item()), 'Model diverged with loss = NaN'
 
@@ -129,15 +161,16 @@ def evaluate(model, device, data_loader, criterion, print_freq=10):
 
 	with torch.no_grad():
 		end = time.time()
-		for i, (input, target) in enumerate(data_loader):
+		for i, (input, age, target) in enumerate(data_loader):
 
 			if isinstance(input, tuple):
 				input = tuple([e.to(device) if type(e) == torch.Tensor else e for e in input])
 			else:
 				input = input.to(device)
+			age = age.to(device)
 			target = target.to(device)
 
-			output = model(input)
+			output = model(input, age)
 			loss = criterion(output, target)
 
 			# measure elapsed time
@@ -148,7 +181,10 @@ def evaluate(model, device, data_loader, criterion, print_freq=10):
 			accuracy.update(compute_batch_accuracy(output, target).item(), target.size(0))
 
 			y_true = target.detach().to('cpu').numpy().tolist()
-			y_pred = output.detach().to('cpu').max(1)[1].numpy().tolist()
+			# One category. output is of dimension (batch_Size,)
+			y_pred = output.detach().to('cpu').round().long().numpy().tolist()
+			# Multiple categories. output is of dimension (batch_size, num_classes)
+			# y_pred = output.detach().to('cpu').max(1)[1].numpy().tolist()
 			results.extend(list(zip(y_true, y_pred)))
 
 			if i % print_freq == 0:
@@ -248,14 +284,15 @@ def evaluate_auc(model, device, data_loader, criterion, print_freq=10):
 
 	return losses.avg, auc.avg, results
 
-def load_dataset(x,y):
+def load_dataset(x,age_arr,y):
 	"""
 	:param path: a path to the seizure data CSV file
 	:return dataset: a TensorDataset consists of a data Tensor and a target Tensor
 	"""
 	# Casting in pytorch tensor
 	data = torch.from_numpy(x).type(torch.FloatTensor)
-	target = torch.from_numpy(y).type(torch.LongTensor)
+	target = torch.from_numpy(y).type(torch.FloatTensor) # BCE with logit expects target to be float. CrossEntropy expects long
+	age = torch.from_numpy(age_arr).type(torch.FloatTensor)
 
 	# x[torch.isnan(x)] = 0
 
@@ -264,7 +301,7 @@ def load_dataset(x,y):
 	# Cn: number of channels
 	# L: length of the sequence
 	data = data.reshape((data.shape[0], data.shape[1], data.shape[2]))
-	dataset = TensorDataset(data, target.long())
+	dataset = TensorDataset(data, age.float(), target.float())
 
 	return dataset
 

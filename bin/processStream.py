@@ -81,6 +81,7 @@ def main():
         # Write the preprocessed DataFrame to Kafka in batches.
         kafka_writer: DataStreamWriter = base_df.writeStream.foreachBatch(preprocess_and_send_to_kafka)
         kafka_query: StreamingQuery = kafka_writer.start()
+        print("await termination")
         kafka_query.awaitTermination()
 
     msg_process(consumer_conf['bootstrap.servers'], 
