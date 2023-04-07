@@ -95,7 +95,6 @@ services:
     image: mysql:8.0
     cap_add:
       - SYS_NICE
-    restart: always
     environment:
       - MYSQL_DATABASE=mysql # use default; no need to create specify MYSQL_DATABASE
       - MYSQL_ROOT_PASSWORD=mauFJcuf5dhRMQrjj
