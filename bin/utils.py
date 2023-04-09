@@ -1,36 +1,66 @@
+
+
+from torch.utils.data import TensorDataset, Dataset
+import torch.nn as nn
 import os
 import time
 import numpy as np
 import torch
 import pandas as pd
-from torch.utils.data import TensorDataset, Dataset
-import torch.nn as nn
 import configparser
 import socket
-import wfdb
 from pyspark.sql import SparkSession
 import datetime
+from sys import platform
+import wfdb
 
 def get_global_config():
-    """Read in all the config variables for the other files to use."""
-    config = configparser.ConfigParser()	
-    config.read('config.cfg')
-    config_vars = {
-        "MOUNTPATH": config.get("PATHS", "MOUNTPATH"),
-        "DATAPATH": config.get("PATHS", "DATAPATH"),
-        "MIMICPATH": config.get("PATHS", "MIMICPATH"),
-        "DEMOPATH": config.get("PATHS", "DEMOPATH"),
-        "WAVEFPATH": config.get("PATHS", "WAVEFPATH"),
-        "OUTPUTPATH": config.get("PATHS", "OUTPUTPATH"),
-        "MODELPATH": config.get("PATHS", "MODELPATH"),
-        "USE_CUDA": config.getboolean("SETTINGS", "USE_CUDA"),
-        "NUM_WORKERS": config.getint("SETTINGS", "NUM_WORKERS"),
-        "CHANNEL_NAMES": config.get("SETTINGS", "CHANNEL_NAMES").split(", "),
-        "WINDOWSIZE": config.getint("SETTINGS", "WINDOWSIZE"),
-        "RECORDOVERLAP": config.getfloat("SETTINGS", "RECORDOVERLAP"),
-        "BATCHSIZE": config.getint("SETTINGS", "BATCHSIZE"),
-    }
-    return config_vars
+	"""Read in all the config variables for the other files to use."""
+	config = configparser.ConfigParser()	
+	if platform == "linux" or platform == "linux2":
+		config.read('config.cfg')
+		config_vars = {
+			"MOUNTPATH": config.get("PATHS", "MOUNTPATH"),
+			"DATAPATH": config.get("PATHS", "DATAPATH"),
+			"MIMICPATH": config.get("PATHS", "MIMICPATH"),
+			"DEMOPATH": config.get("PATHS", "DEMOPATH"),
+			"WAVEFPATH": config.get("PATHS", "WAVEFPATH"),
+			"OUTPUTPATH": config.get("PATHS", "OUTPUTPATH"),
+			"MODELPATH": config.get("PATHS", "MODELPATH"),
+			"EXPLOREPATH": config.get("PATHS", "EXPLOREPATH"),
+			"USE_CUDA": config.getboolean("SETTINGS", "USE_CUDA"),
+			"NUM_WORKERS": config.getint("SETTINGS", "NUM_WORKERS"),
+			"CHANNEL_NAMES": config.get("SETTINGS", "CHANNEL_NAMES").split(", "),
+			"WINDOWSIZE": config.getint("SETTINGS", "WINDOWSIZE"),
+			"RECORDOVERLAP": config.getfloat("SETTINGS", "RECORDOVERLAP"),
+			"BATCHSIZE": config.getint("SETTINGS", "BATCHSIZE"),
+			}
+		
+	elif platform == "darwin":
+		config.read('../config.cfg')
+		#mac
+		config_vars = {
+			"MOUNTPATH": config.get("PATHS", "LOCALMOUNTPATH"),
+			"DATAPATH": config.get("PATHS", "LOCALDATAPATH"),
+			"MIMICPATH": config.get("PATHS", "LOCALMIMICPATH"),
+			"DEMOPATH": config.get("PATHS", "LOCALDEMOPATH"),
+			"WAVEFPATH": config.get("PATHS", "LOCALWAVEFPATH"),
+			"OUTPUTPATH": config.get("PATHS", "LOCALOUTPUTPATH"),
+			"MODELPATH": config.get("PATHS", "LOCALMODELPATH"),
+			"EXPLOREPATH": config.get("PATHS", "LOCALEXPLOREPATH"),
+			"USE_CUDA": config.getboolean("SETTINGS", "USE_CUDA"),
+			"NUM_WORKERS": config.getint("SETTINGS", "NUM_WORKERS"),
+			"CHANNEL_NAMES": config.get("SETTINGS", "CHANNEL_NAMES").split(", "),
+			"WINDOWSIZE": config.getint("SETTINGS", "WINDOWSIZE"),
+			"RECORDOVERLAP": config.getfloat("SETTINGS", "RECORDOVERLAP"),
+			"BATCHSIZE": config.getint("SETTINGS", "BATCHSIZE")
+		}
+		
+	elif platform == "win32":
+		# Windows...
+		pass
+	
+	return config_vars
 
 cfg = get_global_config()
 
@@ -317,90 +347,127 @@ def load_dataset(x,age_arr,y):
 Utility functions for streaming
 """
 def acked(err, msg):
-    if err is not None:
-        print("Failed to deliver message: %s: %s" % (str(msg.value()), str(err)))
-    else:
-        print("Message produced: %s" % (str(msg.value())))
+	if err is not None:
+		print("Failed to deliver message: %s: %s" % (str(msg.value()), str(err)))
+	else:
+		print("Message produced: %s" % (str(msg.value())))
 
 def get_producer_config():
 	return {'bootstrap.servers': "172.18.0.4:29092",
-            'client.id': socket.gethostname(),
-            'acks':'all', # continuously prints ack every time a message is sent. but slows process down. 
-            'retries':5
+			'client.id': socket.gethostname(),
+			'acks':'all', # continuously prints ack every time a message is sent. but slows process down. 
+			'retries':5
 			}
 
 def get_consumer_config():
 	return {'bootstrap.servers': "172.18.0.4:29092",
-            'client.id': socket.gethostname(),
-            'acks':'all' # continuously prints ack every time a message is sent. but slows process down. 
-            }
+			'client.id': socket.gethostname(),
+			'acks':'all' # continuously prints ack every time a message is sent. but slows process down. 
+			}
 
 # Functions for waveform
 def get_waveform_path(record_name):
-    patient_id = record_name[0:7]
-    return cfg['WAVEFPATH'] + f'/{patient_id[0:3]}/{patient_id}/{record_name}'
+	patient_id = record_name[0:7]
+	return cfg['WAVEFPATH'] + f'/{patient_id[0:3]}/{patient_id}/{record_name}'
 
 def get_record(record_name):
-    patient_path = get_waveform_path(record_name)
-    return wfdb.rdrecord(patient_path, channel_names=cfg['CHANNEL_NAMES'])
+	patient_path = get_waveform_path(record_name)
+	return wfdb.rdrecord(patient_path, channel_names=cfg['CHANNEL_NAMES'])
 
 def get_base_time(record_name):
-    """Base time is the starting time of a waveform"""
-    basetime = record_name[8:]
-    basetime = basetime.strip().strip('n')
-    return basetime
+	"""Base time is the starting time of a waveform"""
+	basetime = record_name[8:]
+	basetime = basetime.strip().strip('n')
+	return basetime
 
 def get_ending_time(record_name):
-    """Ending time is the end time of a record"""
-    # Get waveform data
-    record = get_record(record_name)
-    
+	"""Ending time is the end time of a record"""
+	# Get waveform data
+	record = get_record(record_name)
+	
 	# # Version1: Retrieve the ending time as the time using basetime + numrecords
-    # # get time when recording started
-    # base_time = datetime.datetime.combine(record.__dict__['base_date'], 
-    #                         record.__dict__['base_time'])
-    
-    # duration = record.__dict__['sig_len'] * (1/record.__dict__['fs']) 
+	# # get time when recording started
+	# base_time = datetime.datetime.combine(record.__dict__['base_date'], 
+	#                         record.__dict__['base_time'])
+	
+	# duration = record.__dict__['sig_len'] * (1/record.__dict__['fs']) 
 
-    # # Add duration to base time
-    # end_time = base_time + datetime.timedelta(seconds=duration)
+	# # Add duration to base time
+	# end_time = base_time + datetime.timedelta(seconds=duration)
 	
 	# # Version 2: Retrieve the ending time as the final valid index in the dataframe
 	# I think this is more accurate. We'll go with this.
-    record_df = record.to_dataframe()
-    
-    end_time = record_df.last_valid_index()
+	record_df = record.to_dataframe()
+	
+	end_time = record_df.last_valid_index().to_pydatetime()
 
-    record_present = [0 for i in range(len(cfg['CHANNEL_NAMES']))]
+	record_present = [0 for i in range(len(cfg['CHANNEL_NAMES']))]
 
-    # One hot encode the presence of signals
-    for idx, val in enumerate(cfg['CHANNEL_NAMES']):
-        if val in record.__dict__['sig_name']:
-            record_present[idx] = 1
+	# One hot encode the presence of signals
+	for idx, val in enumerate(cfg['CHANNEL_NAMES']):
+		if val in record.__dict__['sig_name']:
+			record_present[idx] = 1
 
-    return end_time, record_present
+	return end_time, record_present
+
+def plot_waveform(record_name = 'p087675-2104-12-05-03-53n', ca_time_str = '2104-12-05 08:40:00'):
+	# Get waveform data
+	patient_path = get_waveform_path(record_name)
+	record = wfdb.rdrecord(patient_path, channel_names=cfg['CHANNEL_NAMES'])
+
+	# Select only HR from the plots, not with the channels parameter
+	fig = wfdb.plot_wfdb(record=record, title=record_name[0:7], figsize=(10,15), return_fig=True)
+	ax_list = fig.axes
+
+	# get time when recording started
+	base_time = datetime.datetime.combine(record.__dict__['base_date'], 
+							record.__dict__['base_time'])
+
+	# Create datetime using strptime
+	ca_time = datetime.datetime.strptime(ca_time_str, '%Y-%m-%d %H:%M:%S')
+
+	# find time delta between base_time and ca_time
+	# Convert it to an int that represents the number of seconds
+	time_delta = int((ca_time - base_time).total_seconds())
+
+	# Plot a vertical line at time_delta
+	if time_delta > 0:
+		for ax in ax_list:
+			ax.axvline(x=time_delta, color='red', linestyle='--',)
+	else:
+		# change title of fig
+		fig.suptitle('Cardiac Arrest Time is before the start of the recording')
+
+	fig.show()
+	try:
+		# Not necessary in production
+		from IPython.display import display
+		display(record.__dict__)
+	except:
+		pass
+		
 
 # Helper functions for creating dataset
 def create_batch(df, window_size=cfg['WINDOWSIZE'], overlap_pct=cfg['RECORDOVERLAP']):
-    # Convert to numpy array of 120 rows each
-    # with intersect of 40%
-    # Set the window size to 120 and the overlap to 40%
-    overlap = int(window_size * overlap_pct)
+	# Convert to numpy array of 120 rows each
+	# with intersect of 40%
+	# Set the window size to 120 and the overlap to 40%
+	overlap = int(window_size * overlap_pct)
 
-    # Convert the DataFrame to a numpy array
-    data = df.values
+	# Convert the DataFrame to a numpy array
+	data = df.values
 
-    # Use the rolling method to create the sliding windows
-    windows = []
-    for i in range(0, len(data) - window_size, window_size - overlap):
-        window = data[i:i+window_size]
-        windows.append(window)
+	# Use the rolling method to create the sliding windows
+	windows = []
+	for i in range(0, len(data) - window_size, window_size - overlap):
+		window = data[i:i+window_size]
+		windows.append(window)
 
-    # Convert the list of windows to a numpy array
-    return np.array(windows)
+	# Convert the list of windows to a numpy array
+	return np.array(windows)
 
 def get_arr(arr, y):
-    return np.array([y]*arr.shape[0]).squeeze()
+	return np.array([y]*arr.shape[0]).squeeze()
 
 def load_dataset(x,age_arr,y):
 	"""
@@ -426,105 +493,106 @@ def load_dataset(x,age_arr,y):
 # Running a model with a dummy
 # To do: https://pytorch.org/docs/stable/data.html#torch.utils.data.IterableDataset
 def run_model():
-    """A dummy model that takes uses a dummy model and produces dummy predictions."""
-    print('Starting prediction...')
+	"""A dummy model that takes uses a dummy model and produces dummy predictions."""
+	print('Starting prediction...')
 
-    # Defining constants
-    SUBJECTID = 70723
-    RECORDNAME = 'p070723-2163-11-18-16-28n'
-    BASETIME = get_base_time(RECORDNAME)
-    ENDTIME, RECORD_PRESENT = get_ending_time(RECORDNAME)
-    CATIME = datetime.datetime.strptime('2163-11-20 11:37:20', '%Y-%m-%d %H:%M:%S') # ORIGINALLY 2163-11-18 15:06:00 (TIME OF NOTEEVENTS)
-    SPLITTIME = CATIME - datetime.timedelta(hours=2)
-    FINISHTIME = SPLITTIME - datetime.timedelta(minutes=5)
-    AGE = 60
+	# Defining constants
+	SUBJECTID = 70723
+	RECORDNAME = 'p070723-2163-11-18-16-28n'
+	BASETIME = get_base_time(RECORDNAME)
+	ENDTIME, RECORD_PRESENT = get_ending_time(RECORDNAME)
+	CATIME = datetime.datetime.strptime('2163-11-20 11:37:20', '%Y-%m-%d %H:%M:%S') # ORIGINALLY 2163-11-18 15:06:00 (TIME OF NOTEEVENTS)
+	SPLITTIME = CATIME - datetime.timedelta(hours=2)
+	FINISHTIME = SPLITTIME - datetime.timedelta(minutes=5)
+	AGE = 60
 
-    # Retrieve record
-    record=get_record(RECORDNAME)
-    record_df = record.to_dataframe()
+	# Retrieve record
+	record=get_record(RECORDNAME)
+	record_df = record.to_dataframe()
 
-    # get the index of the first non-null value in the DataFrame
-    actual_BASETIME = record_df.first_valid_index()
+	# get the index of the first non-null value in the DataFrame
+	actual_BASETIME = record_df.first_valid_index()
 
-    # get actual CA time as the final valid index of the entire dataframe
-    # if the patient is dead
-    actual_CATIME = record_df.last_valid_index()
+	# get actual CA time as the final valid index of the entire dataframe
+	# if the patient is dead
+	actual_CATIME = record_df.last_valid_index()
 
-    # get actual splittime
-    actual_SPLITTIME = actual_CATIME - datetime.timedelta(hours=2)
+	# get actual splittime
+	actual_SPLITTIME = actual_CATIME - datetime.timedelta(hours=2)
 
-    actual_FINISHTIME = actual_CATIME - datetime.timedelta(minutes=5)
+	actual_FINISHTIME = actual_CATIME - datetime.timedelta(minutes=5)
 
-    # retrieve the first non-null record using the loc method
-    record_df = record_df.loc[actual_BASETIME:actual_CATIME]
+	# retrieve the first non-null record using the loc method
+	record_df = record_df.loc[actual_BASETIME:actual_CATIME]
 
-    # Create one-hot encoding as a way to indicate if a channel is present or not
-    # 1 for a channel present, 0 for a channel absent.
-    # e.g. cfg['CHANNEL_NAMES'][0] is 0 if HR is absent.
-    #       cfg['CHANNEL_NAMES'][1] is 1 if PULSE is present.
-    # check config.cfg's CHANNEL_NAMES for index sequence 
-    for channel in cfg['CHANNEL_NAMES']:
-        if channel not in record_df.columns:
-            record_df[channel.replace(' ','_')] = 0
+	# Create one-hot encoding as a way to indicate if a channel is present or not
+	# 1 for a channel present, 0 for a channel absent.
+	# e.g. cfg['CHANNEL_NAMES'][0] is 0 if HR is absent.
+	#       cfg['CHANNEL_NAMES'][1] is 1 if PULSE is present.
+	# check config.cfg's CHANNEL_NAMES for index sequence 
+	for channel in cfg['CHANNEL_NAMES']:
+		if channel not in record_df.columns:
+			record_df[channel.replace(' ','_')] = 0
 
-    # perform preprocessing
-    record_df = record_df.interpolate(method='linear').fillna(0)
+	# perform preprocessing
+	record_df = record_df.interpolate(method='linear').fillna(0)
 
-    # Sample at 5 second interval
-    # take instantaneous value
-    record_df = record_df.resample('5S').first()
+	# Sample at 5 second interval
+	# take instantaneous value
+	record_df = record_df.resample('5S').first()
 
-    # define positive and negative
-    negative_df = record_df.loc[:actual_SPLITTIME]
-    positive_df = record_df.loc[actual_SPLITTIME:actual_FINISHTIME,:]
+	# define positive and negative
+	negative_df = record_df.loc[:actual_SPLITTIME]
+	positive_df = record_df.loc[actual_SPLITTIME:actual_FINISHTIME,:]
 
-    # Create x, y, and a arr for negative
-    x_negative_arr = create_batch(negative_df)
-    y_negative_arr = get_arr(x_negative_arr,0)
-    a_negative_arr = get_arr(x_negative_arr,AGE)
+	# Create x, y, and a arr for negative
+	x_negative_arr = create_batch(negative_df)
+	y_negative_arr = get_arr(x_negative_arr,0)
+	a_negative_arr = get_arr(x_negative_arr,AGE)
 
-    # Create x, y, and a arr for positive
-    x_positive_arr = create_batch(positive_df)
-    y_positive_arr = get_arr(x_positive_arr,1)
-    a_positive_arr = get_arr(x_positive_arr,AGE)
+	# Create x, y, and a arr for positive
+	x_positive_arr = create_batch(positive_df)
+	y_positive_arr = get_arr(x_positive_arr,1)
+	a_positive_arr = get_arr(x_positive_arr,AGE)
 
-    # Concatenating all arrays
-    x_arr = np.concatenate([x_negative_arr,x_positive_arr])
-    y_arr = np.concatenate([y_negative_arr,y_positive_arr])
-    a_arr = np.concatenate([a_negative_arr,a_positive_arr])
+	# Concatenating all arrays
+	x_arr = np.concatenate([x_negative_arr,x_positive_arr])
+	y_arr = np.concatenate([y_negative_arr,y_positive_arr])
+	a_arr = np.concatenate([a_negative_arr,a_positive_arr])
 
-    # converts from (n, 120, 10) to (n, 10, 120) 
-    x_arr = np.swapaxes(x_arr,1,2)
+	# converts from (n, 120, 10) to (n, 10, 120) 
+	x_arr = np.swapaxes(x_arr,1,2)
 
-    # Split between train + test
-    from sklearn.model_selection import ShuffleSplit # or StratifiedShuffleSplit
-    sss = ShuffleSplit(n_splits=1, test_size=0.3)
-    sss.get_n_splits(x_arr, y_arr)
-    train_index, valtest_index = next(sss.split(x_arr, y_arr)) 
+	# Split between train + test
+	from sklearn.model_selection import ShuffleSplit # or StratifiedShuffleSplit
+	sss = ShuffleSplit(n_splits=1, test_size=0.3)
+	sss.get_n_splits(x_arr, y_arr)
+	train_index, valtest_index = next(sss.split(x_arr, y_arr)) 
 
-    X_train, X_valtest = x_arr[train_index], x_arr[valtest_index] 
-    a_train, a_valtest = a_arr[train_index], a_arr[valtest_index] 
-    y_train, y_valtest = y_arr[train_index], y_arr[valtest_index]
+	X_train, X_valtest = x_arr[train_index], x_arr[valtest_index] 
+	a_train, a_valtest = a_arr[train_index], a_arr[valtest_index] 
+	y_train, y_valtest = y_arr[train_index], y_arr[valtest_index]
 
-    # Split between val and test
-    sss = ShuffleSplit(n_splits=1, test_size=0.5)
-    sss.get_n_splits(X_valtest, y_valtest)
-    val_index, test_index = next(sss.split(X_valtest, y_valtest)) 
+	# Split between val and test
+	sss = ShuffleSplit(n_splits=1, test_size=0.5)
+	sss.get_n_splits(X_valtest, y_valtest)
+	val_index, test_index = next(sss.split(X_valtest, y_valtest)) 
 
-    X_val, X_test = X_valtest[val_index], X_valtest[test_index] 
-    a_val, a_test = a_valtest[val_index], a_valtest[test_index] 
-    y_val, y_test = y_valtest[val_index], y_valtest[test_index]
+	X_val, X_test = X_valtest[val_index], X_valtest[test_index] 
+	a_val, a_test = a_valtest[val_index], a_valtest[test_index] 
+	y_val, y_test = y_valtest[val_index], y_valtest[test_index]
 
-    # Loading model
-    model = torch.load(cfg['MODELPATH'])
+	# Loading model
+	model = torch.load(cfg['MODELPATH'])
 
-    print('Model loaded')
-    test_dataset = load_dataset(X_test,a_test,y_test)
-    test_loader = torch.utils.data.DataLoader(test_dataset, batch_size=cfg['BATCHSIZE'], shuffle=False, num_workers=cfg['NUM_WORKERS'], drop_last=True)
-    criterion = nn.BCEWithLogitsLoss()
-    device = torch.device("cuda" if cfg['USE_CUDA'] and torch.cuda.is_available() else "cpu")
-    losses_avg, accuracy_avg, results = evaluate(model, device, test_loader, criterion, print_freq=10)
+	print('Model loaded')
+	test_dataset = load_dataset(X_test,a_test,y_test)
+	test_loader = torch.utils.data.DataLoader(test_dataset, batch_size=cfg['BATCHSIZE'], shuffle=False, num_workers=cfg['NUM_WORKERS'], drop_last=True)
+	criterion = nn.BCEWithLogitsLoss()
+	device = torch.device("cuda" if cfg['USE_CUDA'] and torch.cuda.is_available() else "cpu")
+	losses_avg, accuracy_avg, results = evaluate(model, device, test_loader, criterion, print_freq=10)
 
-    print(results)
+	print(results)
 
-    return results 
+	return results 
+
