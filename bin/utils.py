@@ -115,30 +115,32 @@ class AverageMeter(object):
 		self.avg = self.sum / self.count
 
 def compute_batch_accuracy(output, target):
+	
 	"""Computes the accuracy for a batch"""
+	# Convert target to long
 	with torch.no_grad():
 		batch_size = target.size(0)
 		# For multiple categories
 		# _, pred = output.max(1)
 
 		# For two categories
-		pred = torch.round(torch.sigmoid(output))
+		pred = torch.sigmoid(output).round().long()
 		correct = pred.eq(target).sum()
 
 		return correct * 100.0 / batch_size
 
-def compute_batch_auc(output, target):
-	"""Computes the auc for a batch"""
-	from sklearn.metrics import roc_auc_score
-	with torch.no_grad():
+# def compute_batch_auc(output, target):
+# 	"""Computes the auc for a batch"""
+# 	from sklearn.metrics import roc_auc_score
+# 	with torch.no_grad():
 
-		batch_size = target.size(0)
-		y_pred = torch.sigmoid(output).detach().numpy()[:,1]
-		y_true = target.detach().to('cpu').numpy().tolist()
+# 		batch_size = target.size(0)
+# 		y_pred = torch.sigmoid(output).detach().numpy()[:,1]
+# 		y_true = target.detach().to('cpu').numpy().tolist()
 
-		# print(y_pred)
-		# print(y_true)
-		auc = roc_auc_score(y_true, y_pred)
+# 		# print(y_pred)
+# 		# print(y_true)
+# 		auc = roc_auc_score(y_true, y_pred)
 
 		return auc
 
@@ -220,10 +222,12 @@ def evaluate(model, device, data_loader, criterion, print_freq=10):
 
 			y_true = target.detach().to('cpu').numpy().tolist()
 			# One category. output is of dimension (batch_Size,)
-			y_pred = output.detach().to('cpu').round().long().numpy().tolist()
+			y = torch.sigmoid(output).detach().to('cpu')
+			y_pred = y.round().long().numpy().tolist()
+			y_prob = y.numpy().tolist()
 			# Multiple categories. output is of dimension (batch_size, num_classes)
 			# y_pred = output.detach().to('cpu').max(1)[1].numpy().tolist()
-			results.extend(list(zip(y_true, y_pred)))
+			results.extend(list(zip(y_true, y_pred, y_prob)))
 
 			if i % print_freq == 0:
 				print('Test: [{0}/{1}]\t'
@@ -234,93 +238,93 @@ def evaluate(model, device, data_loader, criterion, print_freq=10):
 
 	return losses.avg, accuracy.avg, results
 
-def train_auc(model, device, data_loader, criterion, optimizer, epoch, print_freq=10):
-	batch_time = AverageMeter()
-	data_time = AverageMeter()
-	losses = AverageMeter()
-	auc = AverageMeter()
+# def train_auc(model, device, data_loader, criterion, optimizer, epoch, print_freq=10):
+# 	batch_time = AverageMeter()
+# 	data_time = AverageMeter()
+# 	losses = AverageMeter()
+# 	auc = AverageMeter()
 
-	model.train()
+# 	model.train()
 
-	end = time.time()
-	for i, (input, target) in enumerate(data_loader):
-		# measure data loading time
-		data_time.update(time.time() - end)
+# 	end = time.time()
+# 	for i, (input, target) in enumerate(data_loader):
+# 		# measure data loading time
+# 		data_time.update(time.time() - end)
 
-		if isinstance(input, tuple):
-			input = tuple([e.to(device) if type(e) == torch.Tensor else e for e in input])
-		else:
-			input = input.to(device)
-		target = target.to(device)
+# 		if isinstance(input, tuple):
+# 			input = tuple([e.to(device) if type(e) == torch.Tensor else e for e in input])
+# 		else:
+# 			input = input.to(device)
+# 		target = target.to(device)
 
-		optimizer.zero_grad()
-		output = model(input)
-		loss = criterion(output, target)
-		assert not np.isnan(loss.item()), 'Model diverged with loss = NaN'
+# 		optimizer.zero_grad()
+# 		output = model(input)
+# 		loss = criterion(output, target)
+# 		assert not np.isnan(loss.item()), 'Model diverged with loss = NaN'
 
-		loss.backward()
-		optimizer.step()
+# 		loss.backward()
+# 		optimizer.step()
 
-		# measure elapsed time
-		batch_time.update(time.time() - end)
-		end = time.time()
+# 		# measure elapsed time
+# 		batch_time.update(time.time() - end)
+# 		end = time.time()
 
-		losses.update(loss.item(), target.size(0))
-		auc.update(compute_batch_auc(output, target).item(), target.size(0))
+# 		losses.update(loss.item(), target.size(0))
+# 		auc.update(compute_batch_auc(output, target).item(), target.size(0))
 
-		if i % print_freq == 0:
-			print('Epoch: [{0}][{1}/{2}]\t'
-				  'Time {batch_time.val:.3f} ({batch_time.avg:.3f})\t'
-				  'Data {data_time.val:.3f} ({data_time.avg:.3f})\t'
-				  'Loss {loss.val:.4f} ({loss.avg:.4f})\t'
-				  'auc {auc.val:.3f} ({auc.avg:.3f})'.format(
-				epoch, i, len(data_loader), batch_time=batch_time,
-				data_time=data_time, loss=losses, auc=auc))
+# 		if i % print_freq == 0:
+# 			print('Epoch: [{0}][{1}/{2}]\t'
+# 				  'Time {batch_time.val:.3f} ({batch_time.avg:.3f})\t'
+# 				  'Data {data_time.val:.3f} ({data_time.avg:.3f})\t'
+# 				  'Loss {loss.val:.4f} ({loss.avg:.4f})\t'
+# 				  'auc {auc.val:.3f} ({auc.avg:.3f})'.format(
+# 				epoch, i, len(data_loader), batch_time=batch_time,
+# 				data_time=data_time, loss=losses, auc=auc))
 
-	return losses.avg, auc.avg
+# 	return losses.avg, auc.avg
 
-def evaluate_auc(model, device, data_loader, criterion, print_freq=10):
-	batch_time = AverageMeter()
-	losses = AverageMeter()
-	auc = AverageMeter()
+# def evaluate_auc(model, device, data_loader, criterion, print_freq=10):
+# 	batch_time = AverageMeter()
+# 	losses = AverageMeter()
+# 	auc = AverageMeter()
 
-	results = []
+# 	results = []
 
-	model.eval()
+# 	model.eval()
 
-	with torch.no_grad():
-		end = time.time()
-		for i, (input, target) in enumerate(data_loader):
+# 	with torch.no_grad():
+# 		end = time.time()
+# 		for i, (input, target) in enumerate(data_loader):
 
-			if isinstance(input, tuple):
-				input = tuple([e.to(device) if type(e) == torch.Tensor else e for e in input])
-			else:
-				input = input.to(device)
-			target = target.to(device)
+# 			if isinstance(input, tuple):
+# 				input = tuple([e.to(device) if type(e) == torch.Tensor else e for e in input])
+# 			else:
+# 				input = input.to(device)
+# 			target = target.to(device)
 
-			output = model(input)
-			loss = criterion(output, target)
+# 			output = model(input)
+# 			loss = criterion(output, target)
 
-			# measure elapsed time
-			batch_time.update(time.time() - end)
-			end = time.time()
+# 			# measure elapsed time
+# 			batch_time.update(time.time() - end)
+# 			end = time.time()
 
-			losses.update(loss.item(), target.size(0))
-			auc.update(compute_batch_auc(output, target).item(), target.size(0))
+# 			losses.update(loss.item(), target.size(0))
+# 			auc.update(compute_batch_auc(output, target).item(), target.size(0))
 
-			y_true = target.detach().to('cpu').numpy().tolist()
-			y_pred = torch.sigmoid(output).detach().numpy()[:,1]
-			# print(y_pred)
-			results.extend(list(zip(y_true, y_pred>0.5)))
+# 			y_true = target.detach().to('cpu').numpy().tolist()
+# 			y_pred = torch.sigmoid(output).detach().numpy()[:,1]
+# 			# print(y_pred)
+# 			results.extend(list(zip(y_true, y_pred>0.5)))
 
-			if i % print_freq == 0:
-				print('Test: [{0}/{1}]\t'
-					  'Time {batch_time.val:.3f} ({batch_time.avg:.3f})\t'
-					  'Loss {loss.val:.4f} ({loss.avg:.4f})\t'
-					  'Accuracy {auc.val:.3f} ({auc.avg:.3f})'.format(
-					i, len(data_loader), batch_time=batch_time, loss=losses, auc=auc))
+# 			if i % print_freq == 0:
+# 				print('Test: [{0}/{1}]\t'
+# 					  'Time {batch_time.val:.3f} ({batch_time.avg:.3f})\t'
+# 					  'Loss {loss.val:.4f} ({loss.avg:.4f})\t'
+# 					  'Accuracy {auc.val:.3f} ({auc.avg:.3f})'.format(
+# 					i, len(data_loader), batch_time=batch_time, loss=losses, auc=auc))
 
-	return losses.avg, auc.avg, results
+# 	return losses.avg, auc.avg, results
 
 def load_dataset(x,age_arr,y):
 	"""
@@ -342,6 +346,26 @@ def load_dataset(x,age_arr,y):
 	dataset = TensorDataset(data, age.float(), target.float())
 
 	return dataset
+
+# def load_dataset_production(x_arr, age_arr):
+# 	"""
+# 	:param path: a path to the seizure data CSV file
+# 	:return dataset: a TensorDataset consists of a data Tensor and a target Tensor
+# 	"""
+# 	# Casting in pytorch tensor
+# 	data = torch.from_numpy(x_arr).type(torch.FloatTensor)
+# 	age = torch.from_numpy(age_arr).type(torch.FloatTensor)
+
+# 	# x[torch.isnan(x)] = 0
+
+# 	# Need to be of size (N, Cn, L)
+# 	# N: batch size
+# 	# Cn: number of channels
+# 	# L: length of the sequence
+# 	# data = data.reshape((data.shape[0], data.shape[1], data.shape[2]))
+# 	dataset = TensorDataset(data, age.float())
+
+# 	return dataset
 
 """
 Utility functions for streaming
@@ -457,14 +481,23 @@ def create_batch(df, window_size=cfg['WINDOWSIZE'], overlap_pct=cfg['RECORDOVERL
 	# Convert the DataFrame to a numpy array
 	data = df.values
 
-	# Use the rolling method to create the sliding windows
-	windows = []
-	for i in range(0, len(data) - window_size, window_size - overlap):
-		window = data[i:i+window_size]
-		windows.append(window)
+	if len(data) == window_size:
+		# Convert the list of windows to a numpy array
+		# Create a new axis to to specify batch size of 1
+		windows = np.array(data)[np.newaxis, :]
 
-	# Convert the list of windows to a numpy array
-	return np.array(windows)
+	else:
+		# Use the rolling method to create the sliding windows
+		windows = []
+		for i in range(0, len(data) - window_size, window_size - overlap):
+			window = data[i:i+window_size]
+			windows.append(window)
+		
+		# Convert the list of windows to a numpy array
+		windows = np.array(windows)
+		
+	# converts from (n, 120, 10) to (n, 10, 120) 
+	return np.swapaxes(windows,1,2)
 
 def get_arr(arr, y):
 	return np.array([y]*arr.shape[0]).squeeze()
@@ -490,9 +523,10 @@ def load_dataset(x,age_arr,y):
 
 	return dataset
 
+
 # Running a model with a dummy
 # To do: https://pytorch.org/docs/stable/data.html#torch.utils.data.IterableDataset
-def run_model():
+def run_model_dummy():
 	"""A dummy model that takes uses a dummy model and produces dummy predictions."""
 	print('Starting prediction...')
 
@@ -507,7 +541,7 @@ def run_model():
 	AGE = 60
 
 	# Retrieve record
-	record=get_record(RECORDNAME)
+	record = get_record(RECORDNAME)
 	record_df = record.to_dataframe()
 
 	# get the index of the first non-null value in the DataFrame
@@ -595,4 +629,27 @@ def run_model():
 	print(results)
 
 	return results 
+
+def run_model(model, device, data_df, age):
+
+	# Generate an feature array
+	x_arr = create_batch(data_df, window_size=cfg['WINDOWSIZE'], overlap_pct = 0)
+
+	# generate an age array of the same size as x_arr
+	a_arr = get_arr(x_arr, age)
+
+	with torch.no_grad():
+		x_arr = torch.from_numpy(x_arr).type(torch.FloatTensor).to(device).float()
+		a_arr = torch.from_numpy(a_arr).type(torch.FloatTensor).unsqueeze(0).to(device).float()
+		output = model(x_arr, a_arr)
+		x_arr=x_arr.to(device)
+		a_arr=a_arr.to(device)
+		y = torch.sigmoid(output).detach().to('cpu')
+		y_pred = y.round().long().numpy().tolist()
+		y_prob = y.numpy().tolist()
+
+		# print(y_prob)
+		# print(y_pred)
+
+	return y_pred, y_prob
 
