@@ -14,20 +14,22 @@ def get_waveform_path(patientid, recordid):
     return cfg['WAVEFPATH'] + f'/{patientid[0:3]}/{patientid}/{recordid}'
 
 def main():
-    """Get arguments from command line"""
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--preprocessing-topic', type=str,
-                        help='Name of the Kafka topic to receive unprocessed data.')
-    parser.add_argument('--speed', type=float, default=1, required=False,
-                        help='Speed up time series by a given multiplicative factor.')
-    args = parser.parse_args()
 
     """Read a patient's waveform data"""
     patient_path = get_waveform_path('p000194', 'p000194-2112-05-23-14-34n')
-    record = wfdb.rdrecord(patient_path)
+    record = wfdb.rdrecord(patient_path, channel_names=cfg["CHANNEL_NAMES"])
     record_arr = record.__dict__['p_signal'] # Get one of the signals
-    frequency = record.fs # sampling frequency in 1/min
-    diff = float(frequency*60) # waiting time in second
+    record_sig = record.__dict__['sig_name'] # signal list
+    frequency = record.fs # sampling frequency in 1/s
+    diff = float(1/frequency) # waiting time in second
+
+    """Get arguments from command line"""
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--signal-list', type=str, nargs="*", default=list(map(lambda x:x.replace(" ","_") ,record_sig)),
+                        help='List of the Kafka topic to receive unprocessed data.')
+    parser.add_argument('--speed', type=float, default=1, required=False,
+                        help='Speed up time series by a given multiplicative factor.')
+    args = parser.parse_args()
 
     """Create producer and send to kafka"""
     producer_conf = get_producer_config()
@@ -35,14 +37,18 @@ def main():
 
     for val in record_arr:
         # Read in the records and send over to producer.
-        if val[0] is not None: 
-            jresult = json.dumps(str(val[0]))
-            producer.produce(args.preprocessing_topic, 
-                             key='p000194', #Patient ID can be used as the key for the key-value pair. 
-                             value=jresult, 
-                             callback=acked)
-            producer.poll(1)
-            producer.flush()
+        if val is not None: 
+            for i, signal in enumerate(val):
+
+                jresult = json.dumps([record_sig[i], val[i]])
+
+                producer.produce(args.signal_list[i], 
+                                key='p000194', #Patient ID can be used as the key for the key-value pair. 
+                                value=jresult, 
+                                callback=acked)
+            
+        #producer.poll(1)
+        producer.flush()
         time.sleep(diff)
 
 if __name__ == "__main__":
