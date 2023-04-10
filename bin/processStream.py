@@ -2,9 +2,11 @@
 
 import argparse
 from confluent_kafka import Consumer, Producer
-from pyspark.sql.functions import explode, split, from_json, to_json, col, struct, lower
+from pyspark.sql.functions import *
 from pyspark.sql.streaming import DataStreamWriter, StreamingQuery
-from utils import acked, get_consumer_config, get_producer_config, build_spark_session
+from utils import acked, get_consumer_config, get_producer_config, build_spark_session, get_global_config
+
+cfg = get_global_config()
 
 def main():
     """Create SparkSession.
@@ -14,15 +16,18 @@ def main():
 
     """Get arguments from command line"""
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--preprocessing-topic', 
+    parser.add_argument('--signal-list', 
                         type=str,
-                        help='Name of the Kafka topic to receive unprocessed data.')
+                        nargs="*",
+                        default=list(map(lambda x:x.replace(" ","_"), cfg["CHANNEL_NAMES"])),
+                        help='List of the Kafka topic to receive unprocessed data.')
     parser.add_argument('--model-call-topic', 
                         type=str, 
                         help='Name of the Kafka topic to send preprocessed data to machine learning model.')
     parser.add_argument('--model-response-topic', 
                         type=str, 
                         help='Name of the Kafka topic to receive response from machine learning model.')
+
 
     args = parser.parse_args()
 
@@ -41,9 +46,18 @@ def main():
         It preprocesses the data and sends it to Kafka.
         Thus it should be modified for necessary preprocessing"""
 
-        # Preprocess the data
-        # Here it does nothing.
-        preprocessed_df = batch_df #.select(lower(col("value")).alias("value_lower"))
+        # select the data
+        # value should be string
+        # preprocessed_df = batch_df.selectExpr("CAST(average as STRING) as value")
+
+        
+        preprocessed_df = batch_df.groupby("key","start","end")\
+            .agg(to_json(collect_list(struct("channel","average"))).alias("value")) \
+            .selectExpr(
+            'key',
+            'value'
+        )
+        
         
         # Send the preprocessed data to Kafka
         preprocessed_df.write.format("kafka")\
@@ -53,7 +67,7 @@ def main():
             .option("key.serializer", "org.apache.kafka.common.serialization.StringSerializer")\
             .save()
 
-    def msg_process(server, topic):
+    def msg_process(server, topics):
         """Create a streaming dataframe that takes in values of messages received, 
         together with the current timestamp.
         Then, print them out.
@@ -64,28 +78,54 @@ def main():
                 readStream
                 .format("kafka")
                 .option("kafka.bootstrap.servers", server)
-                .option("subscribe", topic)
+                .option("subscribe", ",".join(topics))
                 .option("startingOffsets", "latest")
                 .load()
             )
         
         # Select the value and timestamp (the message is received)
-        base_df = df.selectExpr("CAST(value as STRING)", "timestamp")
+
+        base_df = df.selectExpr("CAST(key as STRING) as key",
+                                "CAST(replace(substring_index(CAST(value as STRING), ',' ,1),'[','') as STRING) as channel",
+                                "CAST(replace(substring_index(CAST(value as STRING), ',' ,-1),']','') as FLOAT) as value",
+                                "date_format(timestamp,'HH:mm:ss') as time",
+                                "CAST(timestamp as TIMESTAMP) as timestamp")\
+                    .fillna(0) 
+        
+        # low-pass filtering over l=3 mins
+        base_df = base_df.withWatermark("timestamp", "3 minutes") \
+        .groupBy(
+            base_df.key,
+            base_df.channel,
+            window("timestamp", "3 minutes", '5 seconds')) \
+        .agg(avg("value").alias("average")) \
+        .selectExpr(
+            "key"
+            ,"replace(channel, '\"', '') as channel"
+            ,"window.start"
+            ,"window.end"
+            ,'average'
+        )
         
         # to see what "base_df" is like in the stream,
         # Uncomment base_df.writeStream.outputMode(...)
         # and comment out base_df.writeStream.foreachBatch(...)
         # query = base_df.writeStream.outputMode("append").format("console").trigger(processingTime='10 seconds').start()
-        # query.await_termination()
+        # query.awaitTermination()
 
         # Write the preprocessed DataFrame to Kafka in batches.
-        kafka_writer: DataStreamWriter = base_df.writeStream.foreachBatch(preprocess_and_send_to_kafka)
+        
+        kafka_writer: DataStreamWriter = base_df.writeStream \
+        .foreachBatch(preprocess_and_send_to_kafka)
+
         kafka_query: StreamingQuery = kafka_writer.start()
+        
         print("await termination")
         kafka_query.awaitTermination()
+        
 
-    msg_process(consumer_conf['bootstrap.servers'], 
-                args.preprocessing_topic)
+    msg_process(consumer_conf['bootstrap.servers'],
+                args.signal_list)
 
 if __name__ == "__main__":
     main()

@@ -44,7 +44,7 @@ services:
   processstream:
     image: btctothemoonz/travisnkento:0.0.7
     command: >
-      bash -c "cd ../volume && python bin/processStream.py --preprocessing-topic preprocessing-stream --model-call-topic call-stream --model-response-topic response-stream"
+      bash -c "cd ../volume && python bin/processStream.py --model-call-topic call-stream --model-response-topic response-stream"
     volumes:
       - '$PWD:/volume'
       - '$PWD/jars:/root/.ivy2/jars'
@@ -60,7 +60,7 @@ services:
   sendstream:
     image: btctothemoonz/travisnkento:0.0.7
     command: >
-      bash -c "cd ../volume && python bin/sendStream.py --speed 10 --preprocessing-topic preprocessing-stream"
+      bash -c "cd ../volume && python bin/sendStream.py --speed 10"
     volumes:
       - '$PWD:/volume' #so it turns out this line is causing the problem before. 
                       #previously, all the "home" is replaced because of the conflict in name
