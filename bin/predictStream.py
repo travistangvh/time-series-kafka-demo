@@ -13,6 +13,7 @@ import mysql.connector
 import datetime
 import pandas as pd
 from pyspark.sql.functions import explode, split, from_json, to_json, col, struct, window, avg, collect_list,first
+import logging
 
 cfg = get_global_config()
 cnx = mysql.connector.connect(user='root', 
@@ -22,10 +23,16 @@ cnx = mysql.connector.connect(user='root',
 
 # Define a function to write each batch of streaming data to MySQL
 def write_to_mysql(batch_df, batch_id):
-	collected = batch_df.collect()
-
+	# configure logger
+	logger = logging.getLogger(__name__)
+	logger.setLevel(logging.INFO)
+	formatter = logging.Formatter('%(asctime)s %(levelname)s %(message)s')
+	ch = logging.StreamHandler()
+	ch.setFormatter(formatter)
+	logger.addHandler(ch)
+	
 	# Send results to MySQL
-	print(collected)
+	cursor = cnx.cursor()
 
 	# To do: Call ML model on streaming data
 
@@ -33,17 +40,39 @@ def write_to_mysql(batch_df, batch_id):
 
 	# To do: Send results to MySQL using the following code:
 
-	# cursor = cnx.cursor()
+	# Collect the data from the batch DataFrame
+	collected = batch_df.collect()
 
-	# # Convert the batch DataFrame to a list of tuples
-	# data = [tuple(row) for row in batch_df.collect()]
+	# Convert the batch DataFrame to a list of tuples
+	# data = [tuple(row) for row in collected]
 
-	# # Construct the SQL query to insert the data into MySQL
-	# query = "INSERT INTO mytable (col1, col2) VALUES (%s, %s)"
+	# Construct the SQL query to insert the data into MySQL
+	data = []
 
-	# # Insert the data into MySQL using a prepared statement
-	# cursor.executemany(query, data)
-	# cnx.commit()
+	# Truncate data that is too long
+	for row in collected:
+		truncated_row = []
+		for value in row:
+			if isinstance(value, str):
+				truncated_row.append(value[:100])
+			else:
+				truncated_row.append(value)
+		data.append(tuple(truncated_row))
+
+	# col1: patientid, col2: starttime, col3: endtime, col4: lst
+	query = "INSERT INTO mytable (col1, col2, col3, col4) VALUES (%s, %s, %s, %s)"
+
+	# Insert the data into MySQL using a prepared statement
+	cursor.executemany(query, data)
+	cnx.commit()
+
+	# Create the first cursor for executing queries on the 'mytable' table
+	cursor1 = cnx.cursor()
+	query1 = "SELECT col1, col2, col3, col4 FROM mytable WHERE col1!='hi' ORDER BY col2 desc LIMIT 1"
+	cursor1.execute(query1)
+	rows1 = cursor1.fetchall()
+	logger.info('Rows from mytable:')
+	logger.info(rows1)
 
 def main():
 	spark = build_spark_session()
@@ -124,22 +153,10 @@ def main():
 		print(y_prob)
 		
 		# Write the streaming data to MySQL using foreachBatch
-		# query = base_df.writeStream.foreachBatch(write_to_mysql).trigger(processingTime='10 seconds').start()
+		query = base_df.writeStream.foreachBatch(write_to_mysql).trigger(processingTime='10 seconds').start()
 		
-		query = base_df.writeStream.outputMode("append").format("console").option("truncate", "false").trigger(processingTime='10 seconds').start()
-		query.awaitTermination()
-
-		# # Create the first cursor for executing queries on the 'mytable' table
-		# cursor1 = cnx.cursor()
-		# query1 = 'SELECT * FROM mytable'
-		# cursor1.execute(query1)
-		# rows1 = cursor1.fetchall()
-		# print('Rows from mytable:')
-		# for idx, row in enumerate(rows1):
-		# 	# Too verbose
-		# 	if idx %50==0:
-		# 		print(row)
-		# 	idx+=1
+		# Uncomment the following line in order to print the streaming data to console
+		# query = base_df.writeStream.outputMode("append").format("console").option("truncate", "false").trigger(processingTime='10 seconds').start()
 			
 		query.awaitTermination()
 

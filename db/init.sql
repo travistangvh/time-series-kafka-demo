@@ -5,11 +5,13 @@ USE mydb; -- SELECT DATABASE
 DROP TABLE IF EXISTS mytable;
 CREATE TABLE IF NOT EXISTS mytable(
     col1 VARCHAR(255),
-    col2 VARCHAR(255)
+    col2 VARCHAR(255),
+    col3 VARCHAR(255),
+    col4 VARCHAR(255)
 );
 
-INSERT INTO mytable (col1,col2)
-VALUES ('hi','hi');
+INSERT INTO mytable (col1,col2,col3,col4)
+VALUES ('hi','hi','hi','hi');
 
 DROP TABLE IF EXISTS patients_age;
 CREATE TABLE IF NOT EXISTS patients_age(

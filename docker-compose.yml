@@ -102,7 +102,7 @@ services:
       - '3306:3306'
     volumes:
       # - '$PWD/db:/var/lib/mysql'
-      - '$PWD/db:/docker-entrypoint-initdb.d/'
+      - '$PWD/db:/docker-entrypoint-initdb.d'
       - '$PWD:/volume'
     restart: on-failure
     networks:

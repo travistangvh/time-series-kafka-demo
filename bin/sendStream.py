@@ -4,11 +4,21 @@ import json
 import time
 from dateutil.parser import parse
 
+import logging
+import os
 import wfdb
 from confluent_kafka import Producer
 from utils import get_global_config, get_producer_config, acked
 
 cfg = get_global_config()
+
+logging.basicConfig(format='%(asctime)s %(message)s',
+                    datefmt='%Y-%m-%d %H:%M:%S',
+                    filename=os.path.join(cfg["DATAPATH"], "producer.log"),
+                    filemode='w')
+
+logger = logging.getLogger()
+logger.setLevel(logging.INFO)
 
 def get_waveform_path(patientid, recordid):
     return cfg['WAVEFPATH'] + f'/{patientid[0:3]}/{patientid}/{recordid}'
@@ -16,7 +26,7 @@ def get_waveform_path(patientid, recordid):
 def main():
 
     """Read a patient's waveform data"""
-    patient_path = get_waveform_path('p000194', 'p000194-2112-05-23-14-34n')
+    patient_path = get_waveform_path('p044083', 'p044083-2112-05-04-19-50n')
     record = wfdb.rdrecord(patient_path, channel_names=cfg["CHANNEL_NAMES"])
     record_arr = record.__dict__['p_signal'] # Get one of the signals
     record_sig = record.__dict__['sig_name'] # signal list
@@ -46,6 +56,9 @@ def main():
                                 key='p000194', #Patient ID can be used as the key for the key-value pair. 
                                 value=jresult, 
                                 callback=acked)
+            
+            message = 'Produced message on topic {} with value of {}\n'.format(args.signal_list[i], jresult)
+            logger.info(message)
             
         #producer.poll(1)
         producer.flush()
