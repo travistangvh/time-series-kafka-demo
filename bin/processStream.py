@@ -46,8 +46,18 @@ def main():
         It preprocesses the data and sends it to Kafka.
         Thus it should be modified for necessary preprocessing"""
 
-        # Preprocess the data
-        preprocessed_df = batch_df 
+        # select the data
+        # value should be string
+        # preprocessed_df = batch_df.selectExpr("CAST(average as STRING) as value")
+
+        
+        preprocessed_df = batch_df.groupby("key","start","end")\
+            .agg(to_json(collect_list(struct("channel","average"))).alias("value")) \
+            .selectExpr(
+            'key',
+            'value'
+        )
+        
         
         # Send the preprocessed data to Kafka
         preprocessed_df.write.format("kafka")\
@@ -76,7 +86,7 @@ def main():
         # Select the value and timestamp (the message is received)
 
         base_df = df.selectExpr("CAST(key as STRING) as key",
-                                "replace(substring_index(CAST(value as STRING), ',' ,1),'[','') as channel",
+                                "CAST(replace(substring_index(CAST(value as STRING), ',' ,1),'[','') as STRING) as channel",
                                 "CAST(replace(substring_index(CAST(value as STRING), ',' ,-1),']','') as FLOAT) as value",
                                 "date_format(timestamp,'HH:mm:ss') as time",
                                 "CAST(timestamp as TIMESTAMP) as timestamp")\
@@ -91,7 +101,7 @@ def main():
         .agg(avg("value").alias("average")) \
         .selectExpr(
             "key"
-            ,"channel"
+            ,"replace(channel, '\"', '') as channel"
             ,"window.start"
             ,"window.end"
             ,'average'
@@ -100,21 +110,19 @@ def main():
         # to see what "base_df" is like in the stream,
         # Uncomment base_df.writeStream.outputMode(...)
         # and comment out base_df.writeStream.foreachBatch(...)
-        query = base_df.writeStream.outputMode("append").format("console").trigger(processingTime='10 seconds').start()
-        
-        query.awaitTermination()
+        # query = base_df.writeStream.outputMode("append").format("console").trigger(processingTime='10 seconds').start()
+        # query.awaitTermination()
 
         # Write the preprocessed DataFrame to Kafka in batches.
-        """
+        
         kafka_writer: DataStreamWriter = base_df.writeStream \
-        .foreachBatch(preprocess_and_send_to_kafka) \
-        .trigger()
+        .foreachBatch(preprocess_and_send_to_kafka)
 
         kafka_query: StreamingQuery = kafka_writer.start()
         
         print("await termination")
         kafka_query.awaitTermination()
-        """
+        
 
     msg_process(consumer_conf['bootstrap.servers'],
                 args.signal_list)

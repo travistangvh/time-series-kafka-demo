@@ -89,7 +89,7 @@ def main():
             )
         
         # Select the value and timestamp (the message is received)
-        base_df = df.selectExpr("CAST(value as STRING)", "timestamp")
+        base_df = df.selectExpr("CAST(key as STRING) as key", "CAST(value as STRING)", "timestamp")
         
 
         # The model needs to be called to store the data
@@ -104,19 +104,19 @@ def main():
         # We will also be retrieving the age from the patient_id
         age = 60
 
-        y_pred, y_prob = run_model(model, device, data_df, age)
+        #y_pred, y_prob = run_model(model, device, data_df, age)
 
         ## to see what "base_df" is like in the stream,
         ## Uncomment base_df.writeStream.outputMode(...)
         ## and comment out base_df.writeStream.foreachBatch(...)
-        # query = base_df.writeStream.outputMode("append").format("console").trigger(processingTime='10 seconds').start()
-        # query.awaitTermination()
+        query = base_df.writeStream.outputMode("append").format("console").trigger(processingTime='10 seconds').start()
+        query.awaitTermination()
 
         ## Write the preprocessed DataFrame to Kafka in batches.
         # kafka_writer: DataStreamWriter = base_df.writeStream.foreachBatch(preprocess_and_send_to_kafka)
         # kafka_query: StreamingQuery = kafka_writer.start()
         # kafka_query.awaitTermination()
-
+        """
         # Write the streaming data to MySQL using foreachBatch
         query = base_df.writeStream.foreachBatch(write_to_mysql).trigger(processingTime='10 seconds').start()
         # query.awaitTermination()
@@ -144,8 +144,10 @@ def main():
         query.awaitTermination()
 
         return query
+        """
 
     query = msg_process(consumer_conf['bootstrap.servers'], args.model_call_topic)
 
 if __name__ == "__main__":
+    #print("ML module!")
     main()
