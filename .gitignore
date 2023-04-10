@@ -142,5 +142,12 @@ Dockerfile copy 2
 Dockerfile copy 3
 notes.sh
 *.jpeg
-data/
+data/*
 MyCNN2.pth
+
+!data/waveform/physionet.org/files/mimic3wdb-matched/1.0/p00/p000194/*
+!data/waveform/physionet.org/files/mimic3wdb-matched/1.0/p00/p044083/*
+!/Users/michaelscott/bd4h/project/streaming-env/time-series-kafka-demo/data/data.csv
+!X.TESTINPUT
+!patients_age.csv
+!predictStream copy.py
