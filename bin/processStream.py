@@ -46,6 +46,7 @@ def main():
         It preprocesses the data and sends it to Kafka.
         Thus it should be modified for necessary preprocessing"""
 
+<<<<<<< Updated upstream
         # select the data
         # value should be string
         # preprocessed_df = batch_df.selectExpr("CAST(average as STRING) as value")
@@ -123,6 +124,84 @@ def main():
         print("await termination")
         kafka_query.awaitTermination()
         
+=======
+		# Create a new key in the format of "patientid_channelname". 
+		# An example of the new key is "p000194_SpO2"
+		# The "value" here will be an array containing one value of SpO2 of the patient.
+		preprocessed_df = batch_df.groupby("key","channel","start","end")\
+			.agg(to_json(collect_list("average")).alias("value")) \
+			.selectExpr(
+			'concat(key, "_", channel) as key',
+			'value'
+		)
+
+		# print out preprocessed_df
+		preprocessed_df.show()
+		
+		# Send the preprocessed data to Kafka
+		preprocessed_df.write.format("kafka")\
+			.options(**producer_conf)\
+			.option("topic", "call-stream")\
+			.option("value.serializer", "org.apache.kafka.common.serialization.StringSerializer")\
+			.option("key.serializer", "org.apache.kafka.common.serialization.StringSerializer")\
+			.save()
+
+	def msg_process(server, topics):
+		"""Create a streaming dataframe that takes in values of messages received, 
+		together with the current timestamp.
+		Then, print them out.
+		Then, process the message in batch
+		Reference link: https://medium.com/@aman.parmar17/handling-real-time-kafka-data-streams-using-pyspark-8b6616a3a084"""
+
+		df = (spark.
+				readStream
+				.format("kafka")
+				.option("kafka.bootstrap.servers", server)
+				.option("subscribe", ",".join(topics))
+				.option("startingOffsets", "latest")
+				.load()
+			)
+		
+		# Select the value and timestamp (the message is received)
+
+		base_df = df.selectExpr("CAST(key as STRING) as key",
+								"CAST(replace(substring_index(CAST(value as STRING), ',' ,1),'[','') as STRING) as channel",
+								"CAST(replace(substring_index(CAST(value as STRING), ',' ,-1),']','') as FLOAT) as value",
+								"date_format(timestamp,'HH:mm:ss') as time",
+								"CAST(timestamp as TIMESTAMP) as timestamp")\
+					.fillna(0) 
+
+		# low-pass filtering over l=3 mins 
+		# In the actual case, each window has a duration of 3 minutes. The interval between each window is 5 seconds interval.
+		# In the test case, each window has a duration of 5 seconds. The interval between each window is 2 seconds interval
+		base_df = base_df.withWatermark("timestamp", "3 seconds") \
+		.groupBy(
+			base_df.key,
+            base_df.channel,
+			window("timestamp", "5 seconds", '2 seconds')) \
+		.agg(avg("value").alias("average")) \
+		.selectExpr(
+			"key"
+			,"replace(channel, '\"', '') as channel"
+			,"window.start"
+			,"window.end"
+			,'average'
+		)
+		
+		# To see what "base_df" is like in the stream,
+		# Uncomment base_df.writeStream.outputMode(...)
+		# and comment out base_df.writeStream.foreachBatch(...)
+		# query = base_df.writeStream.outputMode("append").format("console").trigger(processingTime='10 seconds').start()
+		# query.awaitTermination()
+
+		# Write the preprocessed DataFrame to Kafka in batches.
+		kafka_writer: DataStreamWriter = base_df.writeStream.foreachBatch(preprocess_and_send_to_kafka)
+
+		kafka_query: StreamingQuery = kafka_writer.start()
+		
+		kafka_query.awaitTermination()
+		
+>>>>>>> Stashed changes
 
     msg_process(consumer_conf['bootstrap.servers'],
                 args.signal_list)
