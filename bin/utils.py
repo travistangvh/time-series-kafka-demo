@@ -113,7 +113,7 @@ class AverageMeter(object):
 		self.sum += val * n
 		self.count += n
 		self.avg = self.sum / self.count
-
+		
 def compute_batch_accuracy(output, target):
 	
 	"""Computes the accuracy for a batch"""
@@ -126,8 +126,39 @@ def compute_batch_accuracy(output, target):
 		# For two categories
 		pred = torch.sigmoid(output).round().long()
 		correct = pred.eq(target).sum()
-
 		return correct * 100.0 / batch_size
+
+
+# from sklearn.metrics import f1_score
+# def compute_batch_accuracy(output, target):
+# 		pred = torch.sigmoid(output).round().long()
+# 		# Compare pytorch tensor pred with pytorch tensor of 1
+# 		f1_score = f1_score(target.cpu().data, pred.cpu())
+# 		return torch.tensor([f1_score])
+
+
+
+# def compute_batch_accuracy(output, target):
+# 		pred = torch.sigmoid(output).round().long()
+# 		# Compare pytorch tensor pred with pytorch tensor of 1
+# 		tp = ((pred == 1) & (target == 1)).sum()
+# 		tn = ((pred == 0) & (target == 0)).sum()
+# 		fp = ((pred == 1) & (target == 0)).sum()
+# 		fn = ((pred == 0) & (target == 1)).sum()
+# 		if (tp+fp)>0 and tp+fn>0: 
+# 			precision = tp / (tp + fp)
+# 			recall = tp / (tp + fn)
+# 			f1 = 2 * (precision * recall) / (precision + recall)
+# 			return torch.tensor([f1])
+# 		else:
+# 			# zero division
+# 			# Create an empty tensor of size (3, 4, 5)
+# 			res = torch.empty((1))
+
+# 			# Fill the tensor with null values
+# 			res.fill_(float("nan"))
+# 			return res
+
 
 # def compute_batch_auc(output, target):
 # 	"""Computes the auc for a batch"""
