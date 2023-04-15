@@ -44,7 +44,7 @@ services:
   processstream:
     image: btctothemoonz/travisnkento:0.0.7
     command: >
-      bash -c "cd ../volume && python bin/processStream.py --model-call-topic call-stream --model-response-topic response-stream"
+      bash -c "cd ../volume && python bin/processStream.py --model-call-topic call-stream --model-response-topic response-stream --speed 1"
     volumes:
       - '$PWD:/volume'
       - '$PWD/jars:/root/.ivy2/jars'
@@ -77,7 +77,7 @@ services:
   deeplearning:
     image: btctothemoonz/travisnkento:0.0.7
     command: >
-      bash -c "cd ../volume && python bin/predictStream.py --model-call-topic call-stream --model-response-topic response-stream"
+      bash -c "cd ../volume && python bin/predictStream.py --model-call-topic call-stream --model-response-topic response-stream --speed 1"
     volumes:
       - '$PWD:/volume'
       - '$PWD/jars:/root/.ivy2/jars'

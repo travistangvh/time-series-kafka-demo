@@ -56,10 +56,11 @@ def write_to_mysql(batch_df, batch_id):
 	cursor = cnx.cursor()
 
 	# Collect data in the correct format.
-	batch_df = batch_df.withColumn("v_parsed",from_json(col("value2").cast("string"), "struct<channel:array<string>,lst:array<array<double>>>"))
+	batch_df = batch_df.withColumn("v_parsed",from_json(col("value2").cast("string"), "struct<channel:array<int>,lst:array<array<double>>>"))
 	
 	# Select only the relevant columns from batch_df 
-	# batch_df = batch_df.select("patientid", "start_time", "end_time", "v_parsed")
+	# To do: select only relevant columns so collect is faster.
+	batch_df = batch_df.select("patientid", "start_time", "end_time", "v_parsed")
 
 	collected = batch_df.collect()
 
@@ -78,32 +79,40 @@ def write_to_mysql(batch_df, batch_id):
 			start_time = row.start_time
 			end_time = row.end_time
 			v_parsed = row.v_parsed
-			channel = v_parsed.channel # channel is a list, e.g. ['HR',  'PULSE', 'RESP', 'HR', 'RESP', 'PULSE', 'SPo2']. It serves as a way to identify the signal
-			lst = v_parsed.lst # lst is now a list of list 		 [[0.1], [0.2],   [0.4],  [0.5]. [0.1],  [0.5],   [0.6]]
-								# together with channel, we can read that the first signal of HR is 0.1, the first signal of pulse is 0.2, the second signal of HR is 0.5.
+			channel = v_parsed.channel # channel is a list, e.g. ['HR',  	  'PULSE', 		'RESP', 	'HR', 			'RESP']. It serves as a way to identify the signal
+			lst = v_parsed.lst # lst is now a list of list 		 [[0.1, 0.2], [0.2,0.4],    [0.4,0.6],  [0.5, 0.3]. 	[0.1,0.6]]
+								# together with channel, we can read that the first signal of HR is 0.1, 0.2, followed by 0.5,0.3 , the first signal of pulse is 0.2, 0.4, etc.
 								# There are as many items in lst as there are signals in channel.
 
 			logger.info(f"row start time {start_time} endtime {end_time} lst_length {len(lst)}")
 
 			# Flatten list of list
+			logger.info(v_parsed)
+			logger.info(channel)
 			channel = [item for item in channel]
-			lst2 = [item for sublist in lst for item in sublist]
+			# lst2 = [item for sublist in lst for item in sublist]
 
 			# Create a dictionary to store the signal name and its values
 			d = defaultdict(list)
 	
-			for signal_name, val in zip(channel, lst2):
-				d[signal_name].append(val)
+			for signal_index in channel:
+				d[signal_index] = []
+
+			for signal_index, val in zip(channel, lst):
+				d[signal_index].extend(val)
 
 			# Construct a numpy array using all the values in the dictionary
 			x_arr = np.empty((1, 10, 120))
 
+			# Create a reverse lookup table for the signal names
+			# lookup = {v: k for k, v in enumerate(cfg['CHANNEL_NAMES'])}
+
 			# Iterate through all signals
 			for signal_name in cfg['CHANNEL_NAMES']:
 				# If this is the first time a signal is encountered.
-				if signal_name in d:
+				if cfg['CHANNEL_NAMES'].index(signal_name) in d:
 					# Create a numpy array 
-					signal = np.array(d[signal_name])
+					signal = np.array(d[signal_index])
 					
 					# If signal has less than 120 items, we need to wait until it has enough items.
 					if signal.shape[0] < 120:
@@ -126,7 +135,7 @@ def write_to_mysql(batch_df, batch_id):
 				# The first dimension is the batch size. We only have one.
 				# The second dimension is the number of signals. We have 10 signals. 
 				# The third dimension is the number of items in each signal. We have 120 items in each signal.
-				x_arr[0, cfg['CHANNEL_NAMES'].index(signal_name), :] = signal
+				x_arr[0, signal_index, :] = signal
 				
 			# Make sure that the shape of x_arr is correct
 			assert x_arr.shape == (1, 10, 120)
@@ -163,6 +172,7 @@ def write_to_mysql(batch_df, batch_id):
 			cnx.commit()
 
 			# Create the first cursor for executing queries on the 'mytable' table
+			# To do: store data in the correct table.
 			cursor1 = cnx.cursor()
 			query1 = "SELECT col1,col2,col3,col4 FROM mytable WHERE col1!= 'hi' ORDER BY COL2 DESC LIMIT 5"
 			# query1 = "SELECT PREDICTION_ID, SUBJECT_ID, PRED_TIME, RISK_SCORE FROM predictions LIMIT 1"
@@ -186,6 +196,9 @@ def main():
 	parser.add_argument('--model-response-topic', 
 						type=str,
 						help='Name of the Kafka topic to send the response to the call.')
+	
+	parser.add_argument('--speed', type=float, default=1, required=False,
+						help='Speed up time series by a given multiplicative factor.')
 	
 	args = parser.parse_args()
 
@@ -213,16 +226,18 @@ def main():
 		# Perform some preprocessing
 		base_df = base_df.withColumn("key",col("key").cast("string"))
 		base_df = base_df.withColumn("patientid",split(col("key"), '_').getItem(0)) #get patient ID
-		base_df = base_df.withColumn("channel",split(col("key"), '_').getItem(1)) #get signal name
+		base_df = base_df.withColumn("channel",split(col("key"), '_').getItem(1).cast("int")) #get signal name
 		base_df = base_df.withColumn("parsed",from_json(col("value").cast("string"), "array<double>"))
+
+		# logger.info(f"base_df {base_df}")
 
 		# In the actual case, each window has a duration of 600 seconds. The interval between each window is 60 seconds.
 		# We take a window of 600 seconds (10 minutes) and slide it every 60 seconds.
 		# Within 10 minutes, we would have accumulated 120 data points for each signal.
-		base_df = base_df.withWatermark("timestamp", "10 seconds") \
+		base_df = base_df.withWatermark("timestamp", f'{int(10/args.speed)} seconds') \
 		.groupBy(
 			base_df.patientid,
-			window("timestamp", "600 seconds", '60 seconds')
+			window("timestamp", f'{int(600/args.speed)} seconds', f'{int(60/args.speed)} seconds')
 			) \
 		.agg(to_json(struct(collect_list("channel").alias("channel"),collect_list("parsed").alias("lst"))).alias("value2")) \
 			.selectExpr(
@@ -234,7 +249,7 @@ def main():
 		
 		# Write the streaming data to MySQL using foreachBatch.
 		# This sends the data to the model every 60 seconds.
-		query = base_df.writeStream.foreachBatch(write_to_mysql).trigger(processingTime='60 seconds').start()
+		query = base_df.writeStream.foreachBatch(write_to_mysql).trigger(processingTime=f'{int(60/args.speed)} seconds').start()
 		
 		# Uncomment the following line in order to print the streaming data to console
 		# query = base_df.writeStream.outputMode("append").format("console").option("truncate", "false").trigger(processingTime='10 seconds').start()

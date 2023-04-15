@@ -35,7 +35,8 @@ def main():
 	parser.add_argument('--model-response-topic', 
 						type=str, 
 						help='Name of the Kafka topic to receive response from machine learning model.')
-
+	parser.add_argument('--speed', type=float, default=1, required=False,
+						help='Speed up time series by a given multiplicative factor.')
 
 	args = parser.parse_args()
 
@@ -57,7 +58,8 @@ def main():
 		# Create a new key in the format of "patientid_channelname". 
 		# An example of the new key is "p000194_SpO2"
 		# The "value" here will be an array containing one value of SpO2 of the patient.
-		preprocessed_df = batch_df.groupby("key","channel","start","end")\
+		# .agg(avg("value").alias("average")) \
+		preprocessed_df = batch_df.groupby("key","channel")\
 			.agg(to_json(collect_list("average")).alias("value")) \
 			.selectExpr(
 			'concat(key, "_", channel) as key',
@@ -93,7 +95,9 @@ def main():
 		# time-series-kafka-demo-processstream-1  | |        p000194_ST V|  [0.5]|
 		# time-series-kafka-demo-processstream-1  | |    p000194_NBP Mean|  [0.0]|
 		# time-series-kafka-demo-processstream-1  | +--------------------+-------+
-
+		# if preprocessed_df.count()>0:
+		# 	logger.info(preprocessed_df.collect())
+		# 	raise Exception
 		# Send the preprocessed data to Kafka
 		preprocessed_df.write.format("kafka")\
 			.options(**producer_conf)\
@@ -104,6 +108,9 @@ def main():
 
 		# For debugging: We can stop the streaming query after a certain number of batches.
 		logger.info(f'batch_id: {batch_id}')
+
+		
+
 		# if batch_id >= 10:
 		# 	print("Stopping the streaming query...")
 		# 	raise Exception
@@ -126,26 +133,26 @@ def main():
 		
 		# Select the value and timestamp (the message is received)
 		base_df = df.selectExpr("CAST(key as STRING) as key",
-								"CAST(replace(substring_index(CAST(value as STRING), ',' ,1),'[','') as STRING) as channel",
-								"COALESCE(CAST(replace(substring_index(CAST(value as STRING), ',' ,-1),']','') as FLOAT),0.0) as value",
-								"date_format(timestamp,'HH:mm:ss') as time",
+								"CAST(REPLACE(replace(substring_index(CAST(value as STRING), ',' ,1),'[',''), '\"', '')  AS INT) as channel",
+								"CAST(replace(substring_index(CAST(value as STRING), ',' ,-1),']','') as FLOAT) as value",
+								# "date_format(timestamp,'HH:mm:ss') as time",
 								"CAST(timestamp as TIMESTAMP) as timestamp")\
 					.fillna(0) 
 
 		# low-pass filtering over l=3 mins 
 		# In the actual case, each window has a duration of 3 minutes. The interval between each window is 5 seconds interval.
 		# This gives one data point. 
-		base_df = base_df.withWatermark("timestamp", "10 seconds") \
+		base_df = base_df.withWatermark("timestamp", f'{int(10/args.speed)} seconds') \
 		.groupBy(
 			base_df.key,
 			base_df.channel, 
-			window("timestamp", "180 seconds", '5 seconds')) \
+			window("timestamp", f"{int(180/args.speed)} seconds", f'{int(5/args.speed)} seconds')) \
 		.agg(avg("value").alias("average")) \
 		.selectExpr(
 			"key"
-			,"replace(channel, '\"', '') as channel"
-			,"window.start"
-			,"window.end"
+			,"channel"
+			# ,"window.start"
+			# ,"window.end"
 			,'average'
 		)
 
@@ -153,7 +160,7 @@ def main():
 		# The sliding window is 5 seconds. This means that we are obtaining the average of the last 3 minutes every 5 seconds.
 		# Thus, with the passing of 60 seconds, we would have accumulated 60/5=12 additional data points.
 		# Since the trigger is 60 seconds, we will be sending 12 data points every time the trigger is pushed.
-		kafka_writer: DataStreamWriter = base_df.writeStream.foreachBatch(preprocess_and_send_to_kafka).trigger(processingTime='60 seconds')
+		kafka_writer: DataStreamWriter = base_df.writeStream.foreachBatch(preprocess_and_send_to_kafka).trigger(processingTime=f'{int(60/args.speed)} seconds')
 
 		kafka_query: StreamingQuery = kafka_writer.start()
 		

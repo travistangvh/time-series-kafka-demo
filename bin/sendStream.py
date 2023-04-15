@@ -50,7 +50,9 @@ def main():
         if val is not None: 
             for i, signal in enumerate(val):
 
-                jresult = json.dumps([record_sig[i], val[i]])
+                # jresult = json.dumps([record_sig[i], val[i]])
+                # We will send the index of record_sig instead of record_sig to reduce the size of the message.
+                jresult = json.dumps([i, val[i]])
 
                 producer.produce(args.signal_list[i], 
                                 key='p000194', #Patient ID can be used as the key for the key-value pair. 
