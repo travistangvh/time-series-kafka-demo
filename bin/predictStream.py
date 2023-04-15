@@ -87,8 +87,8 @@ def write_to_mysql(batch_df, batch_id):
 			logger.info(f"row start time {start_time} endtime {end_time} lst_length {len(lst)}")
 
 			# Flatten list of list
-			logger.info(v_parsed)
-			logger.info(channel)
+			# logger.info(v_parsed)
+			# logger.info(channel)
 			channel = [item for item in channel]
 			# lst2 = [item for sublist in lst for item in sublist]
 
