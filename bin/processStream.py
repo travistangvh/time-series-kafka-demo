@@ -9,6 +9,13 @@ import logging
 
 cfg = get_global_config()
 
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
+formatter = logging.Formatter('%(asctime)s %(levelname)s %(message)s')
+ch = logging.StreamHandler()
+ch.setFormatter(formatter)
+logger.addHandler(ch)
+
 def main():
 	"""Create SparkSession.
 	Explanation on why the .config(spark.jars.packages) is needed: 
@@ -47,17 +54,6 @@ def main():
 		It preprocesses the data and sends it to Kafka.
 		Thus it should be modified for necessary preprocessing"""
 
-		logger = logging.getLogger(__name__)
-		logger.setLevel(logging.INFO)
-		formatter = logging.Formatter('%(asctime)s %(levelname)s %(message)s')
-		ch = logging.StreamHandler()
-		ch.setFormatter(formatter)
-		logger.addHandler(ch)
-
-		# select the data
-		# value should be string
-		# preprocessed_df = batch_df.selectExpr("CAST(average as STRING) as value")
-
 		# Create a new key in the format of "patientid_channelname". 
 		# An example of the new key is "p000194_SpO2"
 		# The "value" here will be an array containing one value of SpO2 of the patient.
@@ -68,34 +64,35 @@ def main():
 			'value'
 		)
 
-		# print out preprocessed_df
-		logger.info(f'{preprocessed_df.collect()}')
-		#preprocessed_df.show()
-		
-# time-series-kafka-demo-processstream-1  | +--------------------+-------+
-# time-series-kafka-demo-processstream-1  | |                 key|  value|
-# time-series-kafka-demo-processstream-1  | +--------------------+-------+
-# time-series-kafka-demo-processstream-1  | |       p000194_PULSE| [81.0]|
-# time-series-kafka-demo-processstream-1  | |          p000194_HR| [81.0]|
-# time-series-kafka-demo-processstream-1  | |       p000194_PULSE| [80.4]|
-# time-series-kafka-demo-processstream-1  | |       p000194_PULSE| [81.0]|
-# time-series-kafka-demo-processstream-1  | |          p000194_HR| [81.0]|
-# time-series-kafka-demo-processstream-1  | |        p000194_SpO2|[100.0]|
-# time-series-kafka-demo-processstream-1  | |    p000194_NBP Mean|  [0.0]|
-# time-series-kafka-demo-processstream-1  | |        p000194_ST V|  [0.5]|
-# time-series-kafka-demo-processstream-1  | |    p000194_NBP Mean|  [0.0]|
-# time-series-kafka-demo-processstream-1  | |p000194_PVC Rate ...|  [0.0]|
-# time-series-kafka-demo-processstream-1  | |        p000194_ST V|  [0.5]|
-# time-series-kafka-demo-processstream-1  | |    p000194_NBP Dias|  [0.0]|
-# time-series-kafka-demo-processstream-1  | |        p000194_SpO2|[100.0]|
-# time-series-kafka-demo-processstream-1  | |        p000194_ST V|  [0.5]|
-# time-series-kafka-demo-processstream-1  | |          p000194_HR| [81.0]|
-# time-series-kafka-demo-processstream-1  | |    p000194_NBP Mean|  [0.0]|
-# time-series-kafka-demo-processstream-1  | |    p000194_NBP Dias|  [0.0]|
-# time-series-kafka-demo-processstream-1  | |        p000194_RESP| [11.2]|
-# time-series-kafka-demo-processstream-1  | |        p000194_ST V|  [0.5]|
-# time-series-kafka-demo-processstream-1  | |    p000194_NBP Mean|  [0.0]|
-# time-series-kafka-demo-processstream-1  | +--------------------+-------+
+		# Logging for debugging purpose
+		# logger.info(f'processed len: {preprocessed_df.count()}')
+		# logger.info(f'processed: {preprocessed_df.collect()}')
+
+		# This is how preprocessed_df looks like:
+		# time-series-kafka-demo-processstream-1  | +--------------------+-------+
+		# time-series-kafka-demo-processstream-1  | |                 key|  value|
+		# time-series-kafka-demo-processstream-1  | +--------------------+-------+
+		# time-series-kafka-demo-processstream-1  | |       p000194_PULSE| [81.0]|
+		# time-series-kafka-demo-processstream-1  | |          p000194_HR| [81.0]|
+		# time-series-kafka-demo-processstream-1  | |       p000194_PULSE| [80.4]|
+		# time-series-kafka-demo-processstream-1  | |       p000194_PULSE| [81.0]|
+		# time-series-kafka-demo-processstream-1  | |          p000194_HR| [81.0]|
+		# time-series-kafka-demo-processstream-1  | |        p000194_SpO2|[100.0]|
+		# time-series-kafka-demo-processstream-1  | |    p000194_NBP Mean|  [0.0]|
+		# time-series-kafka-demo-processstream-1  | |        p000194_ST V|  [0.5]|
+		# time-series-kafka-demo-processstream-1  | |    p000194_NBP Mean|  [0.0]|
+		# time-series-kafka-demo-processstream-1  | |p000194_PVC Rate ...|  [0.0]|
+		# time-series-kafka-demo-processstream-1  | |        p000194_ST V|  [0.5]|
+		# time-series-kafka-demo-processstream-1  | |    p000194_NBP Dias|  [0.0]|
+		# time-series-kafka-demo-processstream-1  | |        p000194_SpO2|[100.0]|
+		# time-series-kafka-demo-processstream-1  | |        p000194_ST V|  [0.5]|
+		# time-series-kafka-demo-processstream-1  | |          p000194_HR| [81.0]|
+		# time-series-kafka-demo-processstream-1  | |    p000194_NBP Mean|  [0.0]|
+		# time-series-kafka-demo-processstream-1  | |    p000194_NBP Dias|  [0.0]|
+		# time-series-kafka-demo-processstream-1  | |        p000194_RESP| [11.2]|
+		# time-series-kafka-demo-processstream-1  | |        p000194_ST V|  [0.5]|
+		# time-series-kafka-demo-processstream-1  | |    p000194_NBP Mean|  [0.0]|
+		# time-series-kafka-demo-processstream-1  | +--------------------+-------+
 
 		# Send the preprocessed data to Kafka
 		preprocessed_df.write.format("kafka")\
@@ -104,6 +101,12 @@ def main():
 			.option("value.serializer", "org.apache.kafka.common.serialization.StringSerializer")\
 			.option("key.serializer", "org.apache.kafka.common.serialization.StringSerializer")\
 			.save()
+
+		# For debugging: We can stop the streaming query after a certain number of batches.
+		logger.info(f'batch_id: {batch_id}')
+		# if batch_id >= 10:
+		# 	print("Stopping the streaming query...")
+		# 	raise Exception
 
 	def msg_process(server, topics):
 		"""Create a streaming dataframe that takes in values of messages received, 
@@ -122,22 +125,21 @@ def main():
 			)
 		
 		# Select the value and timestamp (the message is received)
-
 		base_df = df.selectExpr("CAST(key as STRING) as key",
 								"CAST(replace(substring_index(CAST(value as STRING), ',' ,1),'[','') as STRING) as channel",
-								"CAST(replace(substring_index(CAST(value as STRING), ',' ,-1),']','') as FLOAT) as value",
+								"COALESCE(CAST(replace(substring_index(CAST(value as STRING), ',' ,-1),']','') as FLOAT),0.0) as value",
 								"date_format(timestamp,'HH:mm:ss') as time",
 								"CAST(timestamp as TIMESTAMP) as timestamp")\
 					.fillna(0) 
 
 		# low-pass filtering over l=3 mins 
 		# In the actual case, each window has a duration of 3 minutes. The interval between each window is 5 seconds interval.
-		# In the test case, each window has a duration of 5 seconds. The interval between each window is 2 seconds interval
-		base_df = base_df.withWatermark("timestamp", "3 seconds") \
+		# This gives one data point. 
+		base_df = base_df.withWatermark("timestamp", "10 seconds") \
 		.groupBy(
 			base_df.key,
-			base_df.channel,
-			window("timestamp", "60 seconds", '6 seconds')) \
+			base_df.channel, 
+			window("timestamp", "180 seconds", '5 seconds')) \
 		.agg(avg("value").alias("average")) \
 		.selectExpr(
 			"key"
@@ -146,15 +148,12 @@ def main():
 			,"window.end"
 			,'average'
 		)
-		
-		# To see what "base_df" is like in the stream,
-		# Uncomment base_df.writeStream.outputMode(...)
-		# and comment out base_df.writeStream.foreachBatch(...)
-		# query = base_df.writeStream.outputMode("append").format("console").option("truncate", "false").trigger(processingTime='10 seconds').start()
-		# query.awaitTermination()
 
-		# Write the preprocessed DataFrame to Kafka in batches.
-		kafka_writer: DataStreamWriter = base_df.writeStream.foreachBatch(preprocess_and_send_to_kafka)
+		# In the last pass filtering, we are obtaining the running average with a window size of 3 minutes (180 seconds).
+		# The sliding window is 5 seconds. This means that we are obtaining the average of the last 3 minutes every 5 seconds.
+		# Thus, with the passing of 60 seconds, we would have accumulated 60/5=12 additional data points.
+		# Since the trigger is 60 seconds, we will be sending 12 data points every time the trigger is pushed.
+		kafka_writer: DataStreamWriter = base_df.writeStream.foreachBatch(preprocess_and_send_to_kafka).trigger(processingTime='60 seconds')
 
 		kafka_query: StreamingQuery = kafka_writer.start()
 		

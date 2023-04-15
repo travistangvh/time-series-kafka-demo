@@ -60,7 +60,7 @@ services:
   sendstream:
     image: btctothemoonz/travisnkento:0.0.7
     command: >
-      bash -c "cd ../volume && python bin/sendStream.py --speed 10"
+      bash -c "cd ../volume && python bin/sendStream.py --speed 1"
     volumes:
       - '$PWD:/volume' #so it turns out this line is causing the problem before. 
                       #previously, all the "home" is replaced because of the conflict in name
@@ -90,6 +90,7 @@ services:
     networks:
       datapipeline:
         ipv4_address: 172.18.0.7
+
     
   db:
     image: mysql:8.0
