@@ -5,6 +5,7 @@ from confluent_kafka import Consumer, Producer
 from pyspark.sql.functions import *
 from pyspark.sql.streaming import DataStreamWriter, StreamingQuery
 from utils import acked, get_consumer_config, get_producer_config, build_spark_session, get_global_config
+import logging
 
 cfg = get_global_config()
 
@@ -46,6 +47,13 @@ def main():
 		It preprocesses the data and sends it to Kafka.
 		Thus it should be modified for necessary preprocessing"""
 
+		logger = logging.getLogger(__name__)
+		logger.setLevel(logging.INFO)
+		formatter = logging.Formatter('%(asctime)s %(levelname)s %(message)s')
+		ch = logging.StreamHandler()
+		ch.setFormatter(formatter)
+		logger.addHandler(ch)
+
 		# select the data
 		# value should be string
 		# preprocessed_df = batch_df.selectExpr("CAST(average as STRING) as value")
@@ -61,8 +69,34 @@ def main():
 		)
 
 		# print out preprocessed_df
-		preprocessed_df.show()
+		logger.info(f'{preprocessed_df.collect()}')
+		#preprocessed_df.show()
 		
+# time-series-kafka-demo-processstream-1  | +--------------------+-------+
+# time-series-kafka-demo-processstream-1  | |                 key|  value|
+# time-series-kafka-demo-processstream-1  | +--------------------+-------+
+# time-series-kafka-demo-processstream-1  | |       p000194_PULSE| [81.0]|
+# time-series-kafka-demo-processstream-1  | |          p000194_HR| [81.0]|
+# time-series-kafka-demo-processstream-1  | |       p000194_PULSE| [80.4]|
+# time-series-kafka-demo-processstream-1  | |       p000194_PULSE| [81.0]|
+# time-series-kafka-demo-processstream-1  | |          p000194_HR| [81.0]|
+# time-series-kafka-demo-processstream-1  | |        p000194_SpO2|[100.0]|
+# time-series-kafka-demo-processstream-1  | |    p000194_NBP Mean|  [0.0]|
+# time-series-kafka-demo-processstream-1  | |        p000194_ST V|  [0.5]|
+# time-series-kafka-demo-processstream-1  | |    p000194_NBP Mean|  [0.0]|
+# time-series-kafka-demo-processstream-1  | |p000194_PVC Rate ...|  [0.0]|
+# time-series-kafka-demo-processstream-1  | |        p000194_ST V|  [0.5]|
+# time-series-kafka-demo-processstream-1  | |    p000194_NBP Dias|  [0.0]|
+# time-series-kafka-demo-processstream-1  | |        p000194_SpO2|[100.0]|
+# time-series-kafka-demo-processstream-1  | |        p000194_ST V|  [0.5]|
+# time-series-kafka-demo-processstream-1  | |          p000194_HR| [81.0]|
+# time-series-kafka-demo-processstream-1  | |    p000194_NBP Mean|  [0.0]|
+# time-series-kafka-demo-processstream-1  | |    p000194_NBP Dias|  [0.0]|
+# time-series-kafka-demo-processstream-1  | |        p000194_RESP| [11.2]|
+# time-series-kafka-demo-processstream-1  | |        p000194_ST V|  [0.5]|
+# time-series-kafka-demo-processstream-1  | |    p000194_NBP Mean|  [0.0]|
+# time-series-kafka-demo-processstream-1  | +--------------------+-------+
+
 		# Send the preprocessed data to Kafka
 		preprocessed_df.write.format("kafka")\
 			.options(**producer_conf)\
@@ -103,7 +137,7 @@ def main():
 		.groupBy(
 			base_df.key,
 			base_df.channel,
-			window("timestamp", "5 seconds", '2 seconds')) \
+			window("timestamp", "60 seconds", '6 seconds')) \
 		.agg(avg("value").alias("average")) \
 		.selectExpr(
 			"key"

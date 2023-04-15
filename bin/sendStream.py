@@ -31,7 +31,7 @@ def main():
     record_arr = record.__dict__['p_signal'] # Get one of the signals
     record_sig = record.__dict__['sig_name'] # signal list
     frequency = record.fs # sampling frequency in 1/s
-    diff = float(1/frequency) # waiting time in second
+    diff = float(1/frequency) # waiting time in second # augmented with the speed up
 
     """Get arguments from command line"""
     parser = argparse.ArgumentParser(description=__doc__)
@@ -57,12 +57,13 @@ def main():
                                 value=jresult, 
                                 callback=acked)
             
-            message = 'Produced message on topic {} with value of {}\n'.format(args.signal_list[i], jresult)
-            logger.info(message)
+            # # Comment out to reduce verbosity
+            # message = 'Produced message on topic {} with value of {}\n'.format(args.signal_list[i], jresult)
+            # logger.info(message)
             
         #producer.poll(1)
         producer.flush()
-        time.sleep(diff)
+        time.sleep(diff/args.speed)
 
 if __name__ == "__main__":
     main()

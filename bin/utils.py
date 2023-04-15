@@ -92,7 +92,7 @@ def build_spark_session():
 	# return SparkSession.builder.appName('app').config('spark.jars', jars).getOrCreate()
 
 	# #Option 2: Dynamically download file (slower but works)
-	return SparkSession.builder.appName('app').config("spark.jars.packages", "org.apache.spark:spark-sql-kafka-0-10_2.12:3.1.2").getOrCreate()
+	return SparkSession.builder.appName('app').master('local').config("spark.jars.packages", "org.apache.spark:spark-sql-kafka-0-10_2.12:3.1.2").getOrCreate()
 
 
 
