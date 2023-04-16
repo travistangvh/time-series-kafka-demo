@@ -5,14 +5,15 @@
 # docker build -t btctothemoonz/travisnkento:0.0.1 .
 # docker push btctothemoonz/travisnkento:0.0.1
 
-FROM btctothemoonz/travisnkento:0.0.6
+FROM btctothemoonz/travisnkento:0.0.7
 ENV REFRESHED_AT 2021-08-15
 
 ADD requirements.txt /home/requirements.txt
 ADD .env /home/.env
 # RUN pip install -r /home/requirements.txt # already installed in travisnkento:0.0.5
 # RUN pip3 install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu
-RUN pip install mysql-connector-python==8.0.32
+# RUN pip install mysql-connector-python==8.0.32
+RUN pip install bokeh==3.1.0
 
 # I do not want any of my local files inside. 
 # I only want the files from the base image

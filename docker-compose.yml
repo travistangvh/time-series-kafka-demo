@@ -42,7 +42,7 @@ services:
         ipv4_address: 172.18.0.4
 
   processstream:
-    image: btctothemoonz/travisnkento:0.0.7
+    image: btctothemoonz/travisnkento:0.0.8
     command: >
       bash -c "cd ../volume && python bin/processStream.py --model-call-topic call-stream --model-response-topic response-stream --speed 1"
     volumes:
@@ -56,9 +56,25 @@ services:
     networks:
       datapipeline:
         ipv4_address: 172.18.0.5
+    
+  plotstream:
+    image: btctothemoonz/travisnkento:0.0.8
+    command: >
+      bash -c "cd ../volume && python bin/plotData.py --model-call-topic call-stream --model-response-topic response-stream --speed 1"
+    volumes:
+      - '$PWD:/volume'
+      - '$PWD/jars:/root/.ivy2/jars'
+    ports:
+      - '5068:5068'
+    depends_on:
+      - kafka
+    restart: on-failure
+    networks:
+      datapipeline:
+        ipv4_address: 172.18.0.9
 
   sendstream:
-    image: btctothemoonz/travisnkento:0.0.7
+    image: btctothemoonz/travisnkento:0.0.8
     command: >
       bash -c "cd ../volume && python bin/sendStream.py --speed 1"
     volumes:
@@ -75,7 +91,7 @@ services:
         ipv4_address: 172.18.0.2
 
   deeplearning:
-    image: btctothemoonz/travisnkento:0.0.7
+    image: btctothemoonz/travisnkento:0.0.8
     command: >
       bash -c "cd ../volume && python bin/predictStream.py --model-call-topic call-stream --model-response-topic response-stream --speed 1"
     volumes:
