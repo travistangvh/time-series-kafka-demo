@@ -19,7 +19,7 @@ from bokeh.models import ColumnDataSource
 from bokeh.io import curdoc
 from collections import defaultdict
 from threading import Thread
-
+import datetime
 cfg = get_global_config()
 
 logger = logging.getLogger(__name__)
@@ -47,7 +47,7 @@ lst = df.iloc[:,2].to_list()
 
 new_data = defaultdict(dict)
 for channel_index, channel_name in enumerate(cfg['CHANNEL_NAMES']):
-	new_data[channel_index] = {'x':[1],'y':[1]}
+	new_data[channel_index] = {'x':[],'y':[]}
 def modify_doc(doc):
 	# Create a new plot
 	# plot = figure()
@@ -56,18 +56,19 @@ def modify_doc(doc):
 	sources = defaultdict(ColumnDataSource)
 	plots = defaultdict(figure)
 	for channel_index, channel_name in enumerate(cfg['CHANNEL_NAMES']):
-		sources[channel_index] = ColumnDataSource({'x': [1], 'y': [1]})
+		sources[channel_index] = ColumnDataSource({'x': [], 'y': []})
 		plots[channel_index] = figure(toolbar_location=None, name=f'{channel_name}_fig',
-									title=f'{channel_name}',x_axis_type = "linear",    
+									title=f'{channel_name}',
+									x_axis_type = "datetime",    
 										tools="pan,wheel_zoom,box_zoom,reset,save",
 										min_width=1000, 
 										height=150)
-		plots[channel_index].line('x', 'y', source=sources[channel_index], name=f'{channel_name}_plot')
+		plots[channel_index].scatter('x', 'y', source=sources[channel_index], name=f'{channel_name}_plot')
 
 	def update_data():
 		for channel_index, _ in enumerate(cfg['CHANNEL_NAMES']):
 			sources[channel_index].stream(new_data[channel_index])
-			new_data[channel_index] = {'x':[],'y':[]} # reset new_data
+			# new_data[channel_index] = {'x':[],'y':[]} # reset new_data
 
 		# # generate a random number
 		# # new_data = {'x': [np.random()], 'y': [np.random()]}
@@ -99,37 +100,6 @@ server_thread.start()
 
 logger.info("unblocked!")
 
-# """ Plot data """
-# doc = curdoc()
-# # Create a new plot
-# # plot = figure(toolbar_location=None)
-# sources = defaultdict(ColumnDataSource)
-# plots = defaultdict(figure)
-# new_data = defaultdict(dict)
-
-# # Plot 10 lines
-# for channel_index, channel_name in enumerate(cfg['CHANNEL_NAMES']):
-# 	sources[channel_index] = ColumnDataSource({'x': [], 'y': []})
-# 	plots[channel_index] = figure(toolbar_location=None, name=f'{channel_index}_fig',
-# 								 title=f'{channel_name}',x_axis_type = "datetime",    
-# 									tools="pan,wheel_zoom,box_zoom,reset,save",
-# 									min_width=1000, 
-# 									height=150
-# 								 )
-# 	new_data[channel_index] = {'x':[],'y':[]}
-# 	plots[channel_index].line('x', 'y', source=sources[channel_index], name=f'{channel_name}_plot')
-
-# def update_data():
-# 	for channel_idx, channel_name in enumerate(cfg['CHANNEL_NAMES']):
-# 		sources[channel_name].stream(new_data)
-
-# # Add a periodic callback to update the plot every second
-# doc.add_periodic_callback(update_data, 1000)
-
-# # Add the plot to the document
-# for channel_index, channel_name in enumerate(cfg['CHANNEL_NAMES']):
-# 	doc.add_root(column(plots[channel_index]))
-	
 def main():
 	"""Create SparkSession.
 	Explanation on why the .config(spark.jars.packages) is needed: 
@@ -163,15 +133,9 @@ def main():
 	producer_conf['kafka.bootstrap.servers'] = producer_conf['bootstrap.servers']
 	del producer_conf['bootstrap.servers']
 
-	for i in range(120):
-		for channel_index, _ in enumerate(CHANNEL_NAMES):
-			new_data[channel_index]['x'].extend([i])
-			new_data[channel_index]['y'].extend([df.iloc[i,channel_index]])
-		time.sleep(1)
-
 
 	# Define the function to preprocess and send the data to Kafka
-	def plot_data(row):
+	def plot_data(batch_df, batch_id):
 		"""The function is fed into foreachBatch of a writestream.
 		It preprocesses the data and sends it to Kafka.
 		Thus it should be modified for necessary preprocessing"""
@@ -180,13 +144,31 @@ def main():
 		# An example of the new key is "p000194_SpO2"
 		# The "value" here will be an array containing one value of SpO2 of the patient.
 		# .agg(avg("value").alias("average")) \
-		if 'channel' in row:
-			logger.info(f"Processing batch {row}")
+		# if 'channel' in row:
+		# 	logger.info(f"Processing batch {row}")
+		collected = batch_df.collect()
 
+		logger.info(f"batchid: {batch_id}")
+		# logger.info(f"collected: {collected}")
+
+		for row in collected:
+			
 			# # Add new data 
 			# channel_index = int(row['channel'])
 			# new_data[channel_index]['x'].extend([row['timestamp']])
 			# new_data[channel_index]['y'].extend([row['value']])
+			if row.timestamp < datetime.datetime(2000, 1, 1, 0, 0, 0, 0):
+				# Ignore rows that do not have proper timetamp (Not sure where this is coming from.)
+				break
+
+			# logger.info({f"row: {row}"})
+			# check if value is nan
+			if row.value is not None:
+				if row.value > 0.00001:
+					# for channel_index, _ in enumerate(CHANNEL_NAMES):
+					new_data[row.channel]['x'].extend([row.timestamp])
+					new_data[row.channel]['y'].extend([row.value])
+					logger.info(f"Added to {row.channel} the {[row.timestamp]} and {[row.value]}")
 
 			# raise Exception
 
@@ -212,14 +194,12 @@ def main():
 								"CAST(replace(substring_index(CAST(value as STRING), ',' ,-1),']','') as FLOAT) as value",
 								# "date_format(timestamp,'HH:mm:ss') as time",
 								"CAST(timestamp as TIMESTAMP) as timestamp")
+					
 		
 		logger.info("Done")
 	
-		# In the last pass filtering, we are obtaining the running average with a window size of 3 minutes (180 seconds).
-		# The sliding window is 5 seconds. This means that we are obtaining the average of the last 3 minutes every 5 seconds.
-		# Thus, with the passing of 60 seconds, we would have accumulated 60/5=12 additional data points.
-		# Since the trigger is 60 seconds, we will be sending 12 data points every time the trigger is pushed.
-		kafka_writer: DataStreamWriter = base_df.writeStream.foreach(plot_data).trigger(processingTime=f'{int(60/args.speed)} seconds')
+		# Update every 5 seconds
+		kafka_writer: DataStreamWriter = base_df.writeStream.foreachBatch(plot_data).trigger(processingTime=f'{int(10/args.speed)} seconds')
 
 		kafka_query: StreamingQuery = kafka_writer.start()
 		
