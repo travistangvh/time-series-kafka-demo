@@ -160,31 +160,38 @@ def write_to_mysql(batch_df, batch_id):
 				y_pred = y.round().long().numpy().tolist()[0]
 				y_prob = y.numpy().tolist()[0]
 			
-			logging.info(f"y_pred: {y_pred}")
-			logging.info(f"y_prob: {y_prob}")
-			logging.info(f"pid: {pid}")
-			logging.info(f"start_time: {start_time}")
+			logger.info(f"y_pred: {y_pred}")
+			logger.info(f"y_prob: {y_prob}")
+			logger.info(f"pid: {pid}")
+			logger.info(f"start_time: {start_time}")
 
 			# Store the data
 			# data = [tuple([str(pid), str(start_time), str(y_prob), str(y_prob)])]
-			data = [tuple([int(pid), start_time, float(y_prob)])]
+			# if int(pid) is None or start_time is None or float(y_prob) is None:
+			import time
+			try:
+				if int(pid) is not None and start_time is not None and float(y_prob) is not None and not np.isnan(y_prob):
+					data = [tuple([int(pid), start_time, float(y_prob)])]
 
-			# col1: patientid, col2: starttime, col3: endtime, col4: lst
-			query = "INSERT INTO predictions (SUBJECT_ID, PRED_TIME, RISK_SCORE) VALUES (%s, %s, %s)"
-			# query = "INSERT INTO mytable (COL1, COL2, COL3, COL4) VALUES (%s, %s, %s, %s)"
+					# col1: patientid, col2: starttime, col3: endtime, col4: lst
+					query = "INSERT INTO predictions (SUBJECT_ID, PRED_TIME, RISK_SCORE) VALUES (%s, %s, %s)"
+					logger.info(query)
+					# query = "INSERT INTO mytable (COL1, COL2, COL3, COL4) VALUES (%s, %s, %s, %s)"
 
-			# Insert the data into MySQL using a prepared statement
-			cursor.executemany(query, data)
-			cnx.commit()
+					# Insert the data into MySQL using a prepared statement
+					cursor.executemany(query, data)
+					cnx.commit()
 
-			# Create the first cursor for executing queries on the 'mytable' table
-			# To do: store data in the correct table.
-			cursor1 = cnx.cursor()
-			# query1 = "SELECT col1,col2,col3,col4 FROM mytable WHERE col1!= 'hi' ORDER BY COL2 DESC LIMIT 5"
-			query1 = "SELECT PREDICTION_ID, SUBJECT_ID, PRED_TIME, RISK_SCORE FROM predictions ORDER BY PRED_TIME DESC LIMIT 1"
-			cursor1.execute(query1)
-			rows1 = cursor1.fetchall()
-			logger.info(f'Rows from predictions:{rows1}')
+					# Create the first cursor for executing queries on the 'mytable' table
+					# To do: store data in the correct table.
+					cursor1 = cnx.cursor()
+					# query1 = "SELECT col1,col2,col3,col4 FROM mytable WHERE col1!= 'hi' ORDER BY COL2 DESC LIMIT 5"
+					query1 = "SELECT SUBJECT_ID, PRED_TIME, RISK_SCORE FROM predictions ORDER BY PRED_TIME DESC LIMIT 1"
+					cursor1.execute(query1)
+					rows1 = cursor1.fetchall()
+					logger.info(f'Rows from predictions:{rows1}')
+			except Exception as e:
+				logger.info(f"Error: {e}")
 
 		# For debugging: We can stop the streaming query after a certain number of batches.
 		logger.info(f'batch_id: {batch_id}')

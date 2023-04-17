@@ -144,9 +144,15 @@ notes.sh
 *.jpeg
 data/*
 MyCNN2.pth
-
+/*.csv.crc
+*.csv.crc
+*.crc
+*.logs
+/*.crc
+/download.py
 !data/waveform/physionet.org/files/mimic3wdb-matched/1.0/p00/p000194/*
-!data/waveform/physionet.org/files/mimic3wdb-matched/1.0/p00/p044083/*
+!data/waveform/physionet.org/files/mimic3wdb-matched/1.0/p04/p044083/*
+!data/waveform/physionet.org/files/mimic3wdb-matched/1.0/p04/p046651/*
 !/Users/michaelscott/bd4h/project/streaming-env/time-series-kafka-demo/data/data.csv
 !X.TESTINPUT
 !patients_age.csv
@@ -155,3 +161,4 @@ MyCNN2.pth
 wget-log.*
 /wget-log
 !patients_waveform.csv
+!
