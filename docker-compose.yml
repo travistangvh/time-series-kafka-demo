@@ -83,8 +83,8 @@ services:
       - '$PWD/jars:/root/.ivy2/jars'
     ports:
       - '8080:8080'
-    depends_on:
-      - processstream
+    # depends_on:
+    #   - processstream
     restart: on-failure
     networks:
       datapipeline:
@@ -130,4 +130,6 @@ volumes:
   db:
     driver: local
 
-  # use docker compose down -v to remove all database
+#  To remove and reinit databse:
+# -docker compose down -v 
+# docker-compose up --force-recreate db   

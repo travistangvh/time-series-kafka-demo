@@ -160,12 +160,18 @@ def write_to_mysql(batch_df, batch_id):
 				y_pred = y.round().long().numpy().tolist()[0]
 				y_prob = y.numpy().tolist()[0]
 			
+			logging.info(f"y_pred: {y_pred}")
+			logging.info(f"y_prob: {y_prob}")
+			logging.info(f"pid: {pid}")
+			logging.info(f"start_time: {start_time}")
+
 			# Store the data
-			data = [tuple([str(pid), str(start_time), str(y_prob), str(y_prob)])]
+			# data = [tuple([str(pid), str(start_time), str(y_prob), str(y_prob)])]
+			data = [tuple([int(pid), start_time, float(y_prob)])]
 
 			# col1: patientid, col2: starttime, col3: endtime, col4: lst
-			# query = "INSERT INTO predictions (SUBJECT_ID, PRED_TIME, RISK_SCORE) VALUES (%s, %s, %s)"
-			query = "INSERT INTO mytable (COL1, COL2, COL3, COL4) VALUES (%s, %s, %s, %s)"
+			query = "INSERT INTO predictions (SUBJECT_ID, PRED_TIME, RISK_SCORE) VALUES (%s, %s, %s)"
+			# query = "INSERT INTO mytable (COL1, COL2, COL3, COL4) VALUES (%s, %s, %s, %s)"
 
 			# Insert the data into MySQL using a prepared statement
 			cursor.executemany(query, data)
@@ -174,8 +180,8 @@ def write_to_mysql(batch_df, batch_id):
 			# Create the first cursor for executing queries on the 'mytable' table
 			# To do: store data in the correct table.
 			cursor1 = cnx.cursor()
-			query1 = "SELECT col1,col2,col3,col4 FROM mytable WHERE col1!= 'hi' ORDER BY COL2 DESC LIMIT 5"
-			# query1 = "SELECT PREDICTION_ID, SUBJECT_ID, PRED_TIME, RISK_SCORE FROM predictions LIMIT 1"
+			# query1 = "SELECT col1,col2,col3,col4 FROM mytable WHERE col1!= 'hi' ORDER BY COL2 DESC LIMIT 5"
+			query1 = "SELECT PREDICTION_ID, SUBJECT_ID, PRED_TIME, RISK_SCORE FROM predictions ORDER BY PRED_TIME DESC LIMIT 1"
 			cursor1.execute(query1)
 			rows1 = cursor1.fetchall()
 			logger.info(f'Rows from predictions:{rows1}')

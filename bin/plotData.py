@@ -23,6 +23,8 @@ from bokeh.models import TabPanel, Tabs, Column, Row, Div
 from bokeh.models import Legend
 import datetime
 import threading
+import mysql.connector
+
 cfg = get_global_config()
 
 logger = logging.getLogger(__name__)
@@ -42,6 +44,13 @@ import numpy as np
 import pandas as pd
 from collections import defaultdict
 import time
+
+# Define MySQL connection
+cnx = mysql.connector.connect(user='root', 
+							  password='mauFJcuf5dhRMQrjj',
+							  host='172.18.0.8', 
+							  database='mydb')
+
 
 CHANNEL_NAMES =  ['HR', 'RESP', 'PULSE', 'PVC Rate per Minute', 'SpO2', 'CVP', 'ST V', 'NBP Mean', 'NBP Dias', 'NBP Sys']
 patient_arr = ['p000194','p044083']
@@ -123,8 +132,8 @@ def main():
 				tabs_d[pid]['original_sources'] = defaultdict(ColumnDataSource)
 				tabs_d[pid]['processed_sources'] = defaultdict(ColumnDataSource)
 				logger.info("Done!!")
-				# tabs_d[pid]['prediction_source'] = ColumnDataSource({'x': [], 'y': []})
-				prediction_source = ColumnDataSource({'x': [], 'y': []})
+				tabs_d[pid]['prediction_source'] = ColumnDataSource({'x': [], 'y': []})
+				# prediction_source = ColumnDataSource({'x': [], 'y': []})
 				tabs_d[pid]['original_plots'] = defaultdict(figure)
 				tabs_d[pid]['processed_plots'] = defaultdict(figure)
 
@@ -139,7 +148,7 @@ def main():
 										tools="pan,wheel_zoom,box_zoom,reset,save",
 										min_width=1600, 
 										height=150)
-				prediction_plot.scatter('x', 'y', source=prediction_source, name=f'Predictions_plot')
+				prediction_plot.scatter('x', 'y', source=tabs_d[pid]['prediction_source'], name=f'Predictions_plot')
 
 				# Adding chart for each channel
 				for channel_index, channel_name in enumerate(CHANNEL_NAMES):
@@ -168,6 +177,8 @@ def main():
 					b = tabs_d[pid]['processed_plots'][channel_index].scatter('x', 'y', 
 																			source=tabs_d[pid]['processed_sources'][channel_index], 
 																			name=f'{channel_name}_plot', fill_color='red')
+				
+					
 
 					# display legend in top left corner (default is top right corner)
 					# plots[channel_index].legend.location = "top_left"
@@ -196,16 +207,36 @@ def main():
 			# mutex.release()
 
 
-
-
 			def update_data():
 				global tabs_d
+				
+				# Read data from 
+				cursor1 = cnx.cursor()
+				query1 = "SELECT SUBJECT_ID, PRED_TIME, RISK_SCORE FROM predictions ORDER BY PRED_TIME"
+				cursor1.execute(query1)
+				rows1 = cursor1.fetchall()
+				final_prediction = '2021-01-01 00:00:00'
+
+				for row in rows1:
+					
+					logger.info(f'Rows from predictions:{rows1}')
+					pid = f'p{row[0]:0>6}'
+					pred_time = row[1]
+					risk_score = row[2]
+					
+					mutex.acquire()
+					tabs_d[pid]['prediction_source'].stream({'x':[pred_time], 'y':[risk_score]})
+					mutex.release()
+				
+					
 				for pid in patient_arr:
 					for channel_index, _ in enumerate(cfg['CHANNEL_NAMES']):
 						mutex.acquire()
 						tabs_d[pid]['original_sources'][channel_index].stream(tabs_d[pid]['new_original_sources'][channel_index].data)
 						tabs_d[pid]['processed_sources'][channel_index].stream(tabs_d[pid]['new_processed_sources'][channel_index].data)
 						mutex.release()
+
+
 
 						# tabs_d[pid]['new_original_sources'][channel_index].data = {'x':[],'y':[]}
 						# tabs_d[pid]['new_processed_sources'][channel_index].data = {'x':[],'y':[]}
@@ -260,13 +291,32 @@ def main():
 		# server.io_loop.start()
 
 		server.start()
-		logger.info("started server")
+		logger.info("started server. Please manually start a browser http://localhost:5068/ else the server will not work.")
+
+
+		# import os
+		# os.system("xdg-open \"\" http://localhost:5068/")
+
+		import webbrowser
+		webbrowser.open('http://localhost:5068/', new = 2)
+
+		# Please manually start a browser http://localhost:5068/
+		# from bokeh.server.session import Session
+		# # Create a new session
+		# session = Session()
+		# session.connect("localhost:5068")
+
+		# # Use the session to modify a document
+		# doc = session.document
+		# doc.title = "My App - Session 1"
+
 		# server.run_until_shutdown()
 		from tornado.ioloop import IOLoop
 
 		IOLoop.current().start()
 		
 		logger.info("ended server")
+
 		# Write
 
 	# Define the function to preprocess and send the data to Kafka
@@ -310,10 +360,10 @@ def main():
 					pid = row.key.replace("'", "")
 					logger.info(f"row: {row}")
 					logger.info(f"row: {row.key}") # p000194
-					if row.key == "p000194":
-						print("Hey, I'm here!")
-					else:
-						print('LOL')
+					# if row.key == "p000194":
+					# 	print("Hey, I'm here!")
+					# else:
+					# 	print('LOL')
 					logger.info(f"row: {pid}")
 					# for channel_index, _ in enumerate(CHANNEL_NAMES):
 					# if 'original_sources' not in tabs_d[pid]:

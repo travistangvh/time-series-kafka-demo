@@ -68,31 +68,31 @@ def build_spark_session():
 	# Option 1. Download the following files into ./jars/ from Maven repo
 	# So there is no need to download them everytime it starts
 	# Ensure these files into './jars/' from Github repo
-	# jars_dir = '/root/.ivy2/jars/'
-	# jars = ','.join([f'{jars_dir}{jar}' for jar in [
-	# 	'com.github.luben_zstd-jni-1.4.8-1.jar',
-	# 	'commons-pool2-2.6.2.jar',
-	# 	'kafka-clients-2.6.0.jar',
-	# 	'lz4-java-1.7.1.jar',
-	# 	'org.apache.commons_commons-pool2-2.6.2.jar',
-	# 	'org.apache.kafka_kafka-clients-2.6.0.jar',
-	# 	'org.apache.spark_spark-sql-kafka-0-10_2.12-3.1.2.jar',
-	# 	'org.apache.spark_spark-token-provider-kafka-0-10_2.12-3.1.2.jar',
-	# 	'org.lz4_lz4-java-1.7.1.jar',
-	# 	'org.slf4j_slf4j-api-1.7.30.jar',
-	# 	'org.spark-project.spark_unused-1.0.0.jar',
-	# 	'org.xerial.snappy_snappy-java-1.1.8.2.jar',
-	# 	'slf4j-api-1.7.30.jar',
-	# 	'snappy-java-1.1.8.2.jar',
-	# 	'spark-sql-kafka-0-10_2.12-3.1.2.jar',
-	# 	'spark-token-provider-kafka-0-10_2.12-3.1.2.jar',
-	# 	'unused-1.0.0.jar',
-	# 	'zstd-jni-1.4.8-1.jar'
-	# ]])
-	# return SparkSession.builder.appName('app').config('spark.jars', jars).getOrCreate()
+	jars_dir = '/root/.ivy2/jars/'
+	jars = ','.join([f'{jars_dir}{jar}' for jar in [
+		'com.github.luben_zstd-jni-1.4.8-1.jar',
+		'commons-pool2-2.6.2.jar',
+		'kafka-clients-2.6.0.jar',
+		'lz4-java-1.7.1.jar',
+		'org.apache.commons_commons-pool2-2.6.2.jar',
+		'org.apache.kafka_kafka-clients-2.6.0.jar',
+		'org.apache.spark_spark-sql-kafka-0-10_2.12-3.1.2.jar',
+		'org.apache.spark_spark-token-provider-kafka-0-10_2.12-3.1.2.jar',
+		'org.lz4_lz4-java-1.7.1.jar',
+		'org.slf4j_slf4j-api-1.7.30.jar',
+		'org.spark-project.spark_unused-1.0.0.jar',
+		'org.xerial.snappy_snappy-java-1.1.8.2.jar',
+		'slf4j-api-1.7.30.jar',
+		'snappy-java-1.1.8.2.jar',
+		'spark-sql-kafka-0-10_2.12-3.1.2.jar',
+		'spark-token-provider-kafka-0-10_2.12-3.1.2.jar',
+		'unused-1.0.0.jar',
+		'zstd-jni-1.4.8-1.jar'
+	]])
+	return SparkSession.builder.appName('app').master('local').config('spark.jars', jars).getOrCreate()
 
 	# #Option 2: Dynamically download file (slower but works)
-	return SparkSession.builder.appName('app').master('local').config("spark.jars.packages", "org.apache.spark:spark-sql-kafka-0-10_2.12:3.1.2").getOrCreate()
+	# return SparkSession.builder.appName('app').master('local').config("spark.jars.packages", "org.apache.spark:spark-sql-kafka-0-10_2.12:3.1.2").getOrCreate()
 
 
 
@@ -406,6 +406,7 @@ def acked(err, msg):
 		print("Failed to deliver message: %s: %s" % (str(msg.value()), str(err)))
 	else:
 		print(f"Sent {str(msg.key())}: {str(msg.value())}")
+	
 
 def get_producer_config():
 	return {'bootstrap.servers': "172.18.0.4:29092",
