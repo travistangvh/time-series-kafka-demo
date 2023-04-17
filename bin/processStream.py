@@ -1,3 +1,5 @@
+# Implement this https://stackoverflow.com/questions/63589249/plotly-dash-display-real-time-data-in-smooth-animation
+
 """Consumes stream for printing all messages to the console."""
 
 import argparse

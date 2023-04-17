@@ -405,7 +405,7 @@ def acked(err, msg):
 	if err is not None:
 		print("Failed to deliver message: %s: %s" % (str(msg.value()), str(err)))
 	else:
-		print("Message produced: %s" % (str(msg.value())))
+		print(f"Sent {str(msg.key())}: {str(msg.value())}")
 
 def get_producer_config():
 	return {'bootstrap.servers': "172.18.0.4:29092",

@@ -11,3 +11,4 @@ wfdb
 # pyhealth
 pyarrow
 mysql-connector-python==8.0.32
+bokeh==3.1.0

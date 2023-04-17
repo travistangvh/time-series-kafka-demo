@@ -48,6 +48,7 @@ lst = df.iloc[:,2].to_list()
 new_data = defaultdict(dict)
 for channel_index, channel_name in enumerate(cfg['CHANNEL_NAMES']):
 	new_data[channel_index] = {'x':[],'y':[]}
+
 def modify_doc(doc):
 	# Create a new plot
 	# plot = figure()
@@ -55,6 +56,7 @@ def modify_doc(doc):
 	# plot.line('x', 'y', source=source)
 	sources = defaultdict(ColumnDataSource)
 	plots = defaultdict(figure)
+	# Add a chart of model prediction
 	for channel_index, channel_name in enumerate(cfg['CHANNEL_NAMES']):
 		sources[channel_index] = ColumnDataSource({'x': [], 'y': []})
 		plots[channel_index] = figure(toolbar_location=None, name=f'{channel_name}_fig',
@@ -69,13 +71,6 @@ def modify_doc(doc):
 		for channel_index, _ in enumerate(cfg['CHANNEL_NAMES']):
 			sources[channel_index].stream(new_data[channel_index])
 			# new_data[channel_index] = {'x':[],'y':[]} # reset new_data
-
-		# # generate a random number
-		# # new_data = {'x': [np.random()], 'y': [np.random()]}
-		# for channel_idx, channel_name in enumerate(CHANNEL_NAMES):
-		# 	new_data = {'x': [i], 'y': [df.iloc[i,channel_idx]]}
-		# 	print(new_data)
-		# 	sources[channel_name].stream(new_data)
 
 	# Add a periodic callback to update the plot every second
 	doc.add_periodic_callback(update_data, 1000)
@@ -148,7 +143,7 @@ def main():
 		# 	logger.info(f"Processing batch {row}")
 		collected = batch_df.collect()
 
-		logger.info(f"batchid: {batch_id}")
+		logger.info(f"plotData batchid: {batch_id}")
 		# logger.info(f"collected: {collected}")
 
 		for row in collected:

@@ -154,3 +154,4 @@ MyCNN2.pth
 !part-00000-bb885bb2-3dce-4754-9567-3a8a7b63d507-c000.csv
 wget-log.*
 /wget-log
+!patients_waveform.csv
