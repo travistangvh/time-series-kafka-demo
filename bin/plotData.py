@@ -8,7 +8,7 @@ from pyspark.sql.functions import *
 from pyspark.sql.streaming import DataStreamWriter, StreamingQuery
 from utils import acked, get_consumer_config, get_producer_config, build_spark_session, get_global_config
 import logging
-
+import asyncio
 # Bokeh imports
 from bokeh.server.server import Server
 from bokeh.application.handlers.function import FunctionHandler
@@ -22,6 +22,7 @@ from threading import Thread
 from bokeh.models import TabPanel, Tabs, Column, Row, Div
 from bokeh.models import Legend
 import datetime
+import threading
 cfg = get_global_config()
 
 logger = logging.getLogger(__name__)
@@ -47,150 +48,16 @@ patient_arr = ['p000194','p044083']
 df = pd.read_csv(f'{cfg["EXPLOREPATH"]}/X.TESTINPUT')
 lst = df.iloc[:,2].to_list()
 
-new_data = defaultdict(dict)
-for channel_index, channel_name in enumerate(cfg['CHANNEL_NAMES']):
-	new_data[channel_index] = {'x':[],'y':[]}
+# A mutex to synchronize access to the shared variable
+mutex = threading.Lock()
 
-tabs_d = {'p000194': {'original_souces': {}, 'processsed_sources': {} },
-	  	'p044083': {'original_souces': {}, 'processsed_sources': {}}}
-
-def modify_doc(doc):
-	# Create a new plot
-	# plot = figure()
-	# source = ColumnDataSource({'x': [], 'y': []})
-	# plot.line('x', 'y', source=source)
-	tabs_l = []
-	title = Div(text='<h1 style="text-align: left">Dashboard for tracking data</h1>')
-	processed_title = Div(text='<h1 style="text-align: left">Preprocessed data</h1>')
-	original_title = Div(text='<h1 style="text-align: left">Original data</h1>')
-	prediction_title = Div(text='<h1 style="text-align: left">Prediction</h1>')
-	for pid in patient_arr:
-
-		tabs_d[pid]['original_sources'] = defaultdict(ColumnDataSource)
-		tabs_d[pid]['processed_sources'] = defaultdict(ColumnDataSource)
-		logger.info("Done!!")
-		tabs_d[pid]['prediction_source'] = ColumnDataSource({'x': [], 'y': []})
-		tabs_d[pid]['original_plots'] = defaultdict(figure)
-		tabs_d[pid]['processed_plots'] = defaultdict(figure)
-		tabs_d[pid]['original_columns'] = Column()
-		tabs_d[pid]['processed_columns'] = Column()
-		tabs_d[pid]['legends_d'] = defaultdict(Legend)
-		# Adding chart for prediction
-		tabs_d[pid]['prediction_plot'] = figure(toolbar_location=None, name=f'Predictions_fig',
-							title=f'Predictions',
-							x_axis_type = "datetime",    
-								tools="pan,wheel_zoom,box_zoom,reset,save",
-								min_width=1600, 
-								height=150)
-		tabs_d[pid]['prediction_plot'].scatter('x', 'y', source=tabs_d[pid]['prediction_source'], name=f'Predictions_plot')
-
-		# Adding chart for each channel
-		for channel_index, channel_name in enumerate(CHANNEL_NAMES):
-			tabs_d[pid]['original_sources'][channel_index] = ColumnDataSource({'x': [], 'y': []})
-			tabs_d[pid]['processed_sources'][channel_index] = ColumnDataSource({'x': [], 'y': []})
-			tabs_d[pid]['original_plots'][channel_index] = figure(toolbar_location=None, name=f'{channel_name}_fig',
-										title=f'{channel_name}',
-										x_axis_type = "datetime",    
-											tools="pan,wheel_zoom,box_zoom,reset,save",
-											min_width=800, 
-											height=150)
-			# Add original data
-			a = tabs_d[pid]['original_plots'][channel_index].scatter('x', 'y', 
-																	 source=tabs_d[pid]['original_sources'][channel_index], 
-																	 name=f'{channel_name}_plot')
-			
-			tabs_d[pid]['processed_plots'] [channel_index] = figure(toolbar_location=None, name=f'{channel_name}_fig',
-																	title=f'{channel_name}',
-																	x_axis_type = "datetime",    
-																		tools="pan,wheel_zoom,box_zoom,reset,save",
-																		min_width=800, 
-																		height=150)
-			# Add jittered data
-			b = tabs_d[pid]['processed_plots'][channel_index].scatter('x', 'y', 
-																	source=tabs_d[pid]['processed_sources'][channel_index], 
-																	name=f'{channel_name}_plot', fill_color='red')
-
-			# display legend in top left corner (default is top right corner)
-			# plots[channel_index].legend.location = "top_left"
-
-			# Add legends
-			# https://stackoverflow.com/questions/26254619/position-of-the-legend-in-a-bokeh-plot
-			# tabs_d[pid]['legends_d'][channel_index] = Legend(items=[
-			# 	("Original",   [a]),
-			# 	("Processed", [b])
-			# ], location=(0, -30))
-
-			# tabs_d[pid]['plots'][channel_index].add_layout(tabs_d[pid]['legends_d'][channel_index],'right')
-
-			# Add the plot to a Column model
-			tabs_d[pid]['original_columns'].children.append(tabs_d[pid]['original_plots'][channel_index])
-			tabs_d[pid]['processed_columns'].children.append(tabs_d[pid]['processed_plots'][channel_index])
-
-		combined_tab = Column(prediction_title,
-							  tabs_d[pid]['prediction_plot'],
-							  Row(Column(original_title,
-										 tabs_d[pid]['original_columns']),
-								  Column(processed_title,
-		 								 tabs_d[pid]['processed_columns'])))
-		tabs_l.append(TabPanel(child=combined_tab, title=str(pid)))
+# tabs_d = {'p000194': {'original_souces': {}, 'processsed_sources': {} },
+# 	  	'p044083': {'original_souces': {}, 'processsed_sources': {}}}
 
 
-	def update():
-		pass
-		# # Update the plot with new data
-		# # You can add your own code here to retrieve the streaming data
-		# i = int(np.random.random()*10)
-		# # print("Update called!")
+# for pid in patient_arr:
 
-		# # generate a random number
-		# # new_data = {'x': [np.random()], 'y': [np.random()]}
-		# for pid in patient_arr:
-		# 	prediction_new_data = {'x': [i], 'y': [np.random.random()]}
-		# 	tabs_d[pid]['prediction_source'].stream(prediction_new_data)
-		# 	if 'original_sources' not in tabs_d[pid]:
-		# 		tabs_d[pid]['original_sources'] = defaultdict(ColumnDataSource)
-		# 		for channel_index, channel_name in enumerate(CHANNEL_NAMES):
-		# 			tabs_d[pid]['original_sources'][channel_index] = ColumnDataSource({'x': [], 'y': []})
-		# 		return
-		# 	if 'processed_sources' not in tabs_d[pid]:
-		# 		tabs_d[pid]['processed_sources'] = defaultdict(ColumnDataSource)
-		# 		for channel_index, channel_name in enumerate(CHANNEL_NAMES):
-		# 			tabs_d[pid]['processed_sources'][channel_index] = ColumnDataSource({'x': [], 'y': []})
-		# 		return
-		# 	for channel_index, _ in enumerate(CHANNEL_NAMES):
-		# 		# original_new_data = {'x': [i], 'y': [df.iloc[i,channel_index]]}
-		# 		# processed_new_data = {'x': [i], 'y': [df.iloc[i,channel_index]+np.random.random()]}
-		# 		# print(new_data)
-		# 		if len(tabs_d[pid]['original_sources'][channel_index]['x'])>0:
-		# 			# tabs_d[pid]['original_sources'][channel_index].stream(tabs_d[pid]['original_sources'][channel_index])
-		# 		if len(tabs_d[pid]['processed_sources'][channel_index]['x'])>0:
-		# 			# tabs_d[pid]['processed_sources'][channel_index].stream(tabs_d[pid]['processed_sources'][channel_index])
 
-	# Add a periodic callback to update the plot every second
-	doc.add_periodic_callback(update, 1000)
-
-	# Add the plot to the document
-	# doc.add_root(column(plot))
-	# for channel_index, channel_name in enumerate(CHANNEL_NAMES):
-	# 	doc.add_root(layouts.column(plots[channel_index]))
-		
-
-	doc.add_root(Tabs(tabs=tabs_l))
-
-# Create a new Bokeh server application
-app = Application(FunctionHandler(modify_doc))
-server = Server({'/': app}, port=5068) # it is crucial to set port=5068, otherwise it will not work
-# server.io_loop.start()
-
-# Define a function to start the I/O loop in a separate thread
-def start_server():
-	server.io_loop.start()
-
-# Start the server in a separate thread
-server_thread = Thread(target=start_server)
-server_thread.start()
-
-logger.info("unblocked!")
 
 def main():
 	"""Create SparkSession.
@@ -226,9 +93,190 @@ def main():
 	del producer_conf['bootstrap.servers']
 
 
+	# Define a function to start the I/O loop in a separate thread
+	def start_server():
+		global tabs_d		
+		tabs_d = defaultdict(dict) # you cannot leave this outside because once you do that this item is actually created outside but only modified inside.
+											# the changes made within this function will not be seen outside
+		def modify_doc(doc):
+			global tabs_d
+			logger.info("Ive been summouned!")
+			# Create a new plot
+			# plot = figure()
+			# source = ColumnDataSource({'x': [], 'y': []})
+			# plot.line('x', 'y', source=source)
+			# mutex.acquire()
+			
+			tabs_l = []
+			title = Div(text='<h1 style="text-align: left">Dashboard for tracking data</h1>')
+			processed_title = Div(text='<h1 style="text-align: left">Preprocessed data</h1>')
+			original_title = Div(text='<h1 style="text-align: left">Original data</h1>')
+			prediction_title = Div(text='<h1 style="text-align: left">Prediction</h1>')
+
+			for pid in patient_arr:
+				tabs_d[pid]= defaultdict(defaultdict)
+			# # for channel_index, channel_name in enumerate(cfg['CHANNEL_NAMES']):
+			# 	tabs_d[pid]['new_original_sources'][channel_index] = {'x':[],'y':[]}
+			# 	tabs_d[pid]['new_processed_sources'][channel_index] = {'x':[],'y':[]}
+				tabs_d[pid]['new_original_sources'] = defaultdict(ColumnDataSource)
+				tabs_d[pid]['new_processed_sources'] = defaultdict(ColumnDataSource)
+				tabs_d[pid]['original_sources'] = defaultdict(ColumnDataSource)
+				tabs_d[pid]['processed_sources'] = defaultdict(ColumnDataSource)
+				logger.info("Done!!")
+				# tabs_d[pid]['prediction_source'] = ColumnDataSource({'x': [], 'y': []})
+				prediction_source = ColumnDataSource({'x': [], 'y': []})
+				tabs_d[pid]['original_plots'] = defaultdict(figure)
+				tabs_d[pid]['processed_plots'] = defaultdict(figure)
+
+				tabs_d[pid]['legends_d'] = defaultdict(Legend)
+
+				original_column = Column()
+				processed_column = Column()
+				# Adding chart for prediction
+				prediction_plot = figure(toolbar_location=None, name=f'Predictions_fig',
+									title=f'Predictions',
+									x_axis_type = "datetime",    
+										tools="pan,wheel_zoom,box_zoom,reset,save",
+										min_width=1600, 
+										height=150)
+				prediction_plot.scatter('x', 'y', source=prediction_source, name=f'Predictions_plot')
+
+				# Adding chart for each channel
+				for channel_index, channel_name in enumerate(CHANNEL_NAMES):
+					tabs_d[pid]['original_sources'][channel_index] = ColumnDataSource({'x': [], 'y': []})
+					tabs_d[pid]['processed_sources'][channel_index] = ColumnDataSource({'x': [], 'y': []})
+					tabs_d[pid]['new_original_sources'][channel_index] = ColumnDataSource({'x': [], 'y': []})
+					tabs_d[pid]['new_processed_sources'][channel_index] = ColumnDataSource({'x': [], 'y': []})
+					tabs_d[pid]['original_plots'][channel_index] = figure(toolbar_location=None, name=f'{channel_name}_fig',
+												title=f'{channel_name}',
+												x_axis_type = "datetime",    
+													tools="pan,wheel_zoom,box_zoom,reset,save",
+													min_width=800, 
+													height=150)
+					# Add original data
+					a = tabs_d[pid]['original_plots'][channel_index].scatter('x', 'y', 
+																			source=tabs_d[pid]['original_sources'][channel_index], 
+																			name=f'{channel_name}_plot')
+					
+					tabs_d[pid]['processed_plots'][channel_index] = figure(toolbar_location=None, name=f'{channel_name}_fig',
+																			title=f'{channel_name}',
+																			x_axis_type = "datetime",    
+																				tools="pan,wheel_zoom,box_zoom,reset,save",
+																				min_width=800, 
+																				height=150)
+					# Add jittered data
+					b = tabs_d[pid]['processed_plots'][channel_index].scatter('x', 'y', 
+																			source=tabs_d[pid]['processed_sources'][channel_index], 
+																			name=f'{channel_name}_plot', fill_color='red')
+
+					# display legend in top left corner (default is top right corner)
+					# plots[channel_index].legend.location = "top_left"
+
+					# Add legends
+					# https://stackoverflow.com/questions/26254619/position-of-the-legend-in-a-bokeh-plot
+					# tabs_d[pid]['legends_d'][channel_index] = Legend(items=[
+					# 	("Original",   [a]),
+					# 	("Processed", [b])
+					# ], location=(0, -30))
+
+					# tabs_d[pid]['plots'][channel_index].add_layout(tabs_d[pid]['legends_d'][channel_index],'right')
+
+					# Add the plot to a Column model
+					original_column.children.append(tabs_d[pid]['original_plots'][channel_index])
+					processed_column.children.append(tabs_d[pid]['processed_plots'][channel_index])
+
+				combined_tab = Column(prediction_title,
+									prediction_plot,
+									Row(Column(original_title,
+												original_column),
+										Column(processed_title,
+												processed_column)))
+				tabs_l.append(TabPanel(child=combined_tab, title=str(pid)))
+
+			# mutex.release()
+
+
+
+
+			def update_data():
+				global tabs_d
+				for pid in patient_arr:
+					for channel_index, _ in enumerate(cfg['CHANNEL_NAMES']):
+						mutex.acquire()
+						tabs_d[pid]['original_sources'][channel_index].stream(tabs_d[pid]['new_original_sources'][channel_index].data)
+						tabs_d[pid]['processed_sources'][channel_index].stream(tabs_d[pid]['new_processed_sources'][channel_index].data)
+						mutex.release()
+
+						# tabs_d[pid]['new_original_sources'][channel_index].data = {'x':[],'y':[]}
+						# tabs_d[pid]['new_processed_sources'][channel_index].data = {'x':[],'y':[]}
+				# # Update the plot with new data
+				# # You can add your own code here to retrieve the streaming data
+				# i = int(np.random.random()*10)
+				# # print("Update called!")
+
+				# # generate a random number
+				# # new_data = {'x': [np.random()], 'y': [np.random()]}
+				# for pid in patient_arr:
+				# 	prediction_new_data = {'x': [i], 'y': [np.random.random()]}
+				# 	tabs_d[pid]['prediction_source'].stream(prediction_new_data)
+				# 	if 'original_sources' not in tabs_d[pid]:
+				# 		tabs_d[pid]['original_sources'] = defaultdict(ColumnDataSource)
+				# 		for channel_index, channel_name in enumerate(CHANNEL_NAMES):
+				# 			tabs_d[pid]['original_sources'][channel_index] = ColumnDataSource({'x': [], 'y': []})
+				# 		return
+				# 	if 'processed_sources' not in tabs_d[pid]:
+				# 		tabs_d[pid]['processed_sources'] = defaultdict(ColumnDataSource)
+				# 		for channel_index, channel_name in enumerate(CHANNEL_NAMES):
+				# 			tabs_d[pid]['processed_sources'][channel_index] = ColumnDataSource({'x': [], 'y': []})
+				# 		return
+				# 	for channel_index, _ in enumerate(CHANNEL_NAMES):
+				# 		# original_new_data = {'x': [i], 'y': [df.iloc[i,channel_index]]}
+				# 		# processed_new_data = {'x': [i], 'y': [df.iloc[i,channel_index]+np.random.random()]}
+				# 		# print(new_data)
+				# 		if len(tabs_d[pid]['original_sources'][channel_index]['x'])>0:
+				# 			# tabs_d[pid]['original_sources'][channel_index].stream(tabs_d[pid]['original_sources'][channel_index])
+				# 		if len(tabs_d[pid]['processed_sources'][channel_index]['x'])>0:
+				# 			# tabs_d[pid]['processed_sources'][channel_index].stream(tabs_d[pid]['processed_sources'][channel_index])
+				# for pid in patient_arr:
+				# 	tabs_d[pid]['processed_plots'][channel_index].data_source.trigger('data', tabs_d[pid]['processed_plots'][channel_index].data_source.data, 
+				# 					 										   				tabs_d[pid]['processed_sources'][channel_index].data)
+			# Add a periodic callback to update the plot every second
+			doc.add_periodic_callback(update_data, 1000)
+
+			# Add the plot to the document
+			# doc.add_root(column(plot))
+			# for channel_index, channel_name in enumerate(CHANNEL_NAMES):
+			# 	doc.add_root(layouts.column(plots[channel_index]))
+				
+
+			doc.add_root(Tabs(tabs=tabs_l))
+
+		# Set up the event loop
+		asyncio.set_event_loop(asyncio.new_event_loop())
+
+		# Create a new Bokeh server application
+		app = Application(FunctionHandler(modify_doc))
+		server = Server({'/': app}, port=5068) # it is crucial to set port=5068, otherwise it will not work
+		# server.io_loop.start()
+
+		server.start()
+		logger.info("started server")
+		# server.run_until_shutdown()
+		from tornado.ioloop import IOLoop
+
+		IOLoop.current().start()
+		
+		logger.info("ended server")
+		# Write
+
 	# Define the function to preprocess and send the data to Kafka
 	def plot_data(batch_df, batch_id):
 		global tabs_d
+
+		mutex.acquire()
+		print(tabs_d)
+		mutex.release()
+		
 		"""The function is fed into foreachBatch of a writestream.
 		It preprocesses the data and sends it to Kafka.
 		Thus it should be modified for necessary preprocessing"""
@@ -262,6 +310,10 @@ def main():
 					pid = row.key.replace("'", "")
 					logger.info(f"row: {row}")
 					logger.info(f"row: {row.key}") # p000194
+					if row.key == "p000194":
+						print("Hey, I'm here!")
+					else:
+						print('LOL')
 					logger.info(f"row: {pid}")
 					# for channel_index, _ in enumerate(CHANNEL_NAMES):
 					# if 'original_sources' not in tabs_d[pid]:
@@ -270,8 +322,12 @@ def main():
 					# 		tabs_d[pid]['original_sources'][channel_index] = ColumnDataSource({'x': [], 'y': []})
 					# 		tabs_d[pid]['processed_sources'][channel_index] = ColumnDataSource({'x': [], 'y': []})
 					logger.info(f"{pid} | {row.channel} | {[row.timestamp]} | {[row.value]}")
-					tabs_d['p000194']['original_sources'][row.channel].data['x'].extend([row.timestamp])
-					tabs_d['p000194']['original_sources'][row.channel].data['y'].extend([row.value])
+					mutex.acquire()
+					tabs_d['p000194']['new_original_sources'][row.channel].data['x'].extend([row.timestamp])
+					tabs_d['p000194']['new_original_sources'][row.channel].data['y'].extend([row.value])
+					tabs_d['p000194']['new_processed_sources'][row.channel].data['x'].extend([row.timestamp])
+					tabs_d['p000194']['new_processed_sources'][row.channel].data['y'].extend([row.value])
+					mutex.release()
 
 			# raise Exception
 
@@ -281,7 +337,10 @@ def main():
 		Then, print them out.
 		Then, process the message in batch
 		Reference link: https://medium.com/@aman.parmar17/handling-real-time-kafka-data-streams-using-pyspark-8b6616a3a084"""
-
+		global tabs_d
+		mutex.acquire()
+		print(tabs_d)
+		mutex.release()
 		df = (spark.
 				readStream
 				.format("kafka")
@@ -308,8 +367,23 @@ def main():
 		
 		kafka_query.awaitTermination()
 
-	msg_process(consumer_conf['bootstrap.servers'],
-				args.signal_list)
+
+	# Start the Visualization Server
+	mutex.acquire()
+	server_thread = Thread(target=start_server)
+	server_thread.start()
+	logger.info("unblocked!")
+	mutex.release()
+
+	time.sleep(60)
+	# Start the messaging server
+	messaging_thread = Thread(target=msg_process, args=(consumer_conf['bootstrap.servers'], args.signal_list))
+	messaging_thread.start()
+
+	server_thread.join()
+	messaging_thread.join()
+	# msg_process(consumer_conf['bootstrap.servers'],
+	# 			args.signal_list)
 
 if __name__ == "__main__":
 	main()
