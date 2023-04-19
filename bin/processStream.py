@@ -9,6 +9,14 @@ from pyspark.sql.streaming import DataStreamWriter, StreamingQuery
 from utils import acked, get_consumer_config, get_producer_config, build_spark_session, get_global_config
 import logging
 
+import sys
+from typing import (
+    Union,
+    List,
+)
+from pyspark.sql.window import Window
+import pyspark.sql
+
 cfg = get_global_config()
 
 logger = logging.getLogger(__name__)
@@ -51,6 +59,48 @@ def main():
 	producer_conf['kafka.bootstrap.servers'] = producer_conf['bootstrap.servers']
 	del producer_conf['bootstrap.servers']
 
+	def ffill(
+		target: str,
+		partition: Union[str, List[str]],
+		sort_key: str,
+	) -> pyspark.sql.Column:
+		"""
+		forward fill
+
+		Args:
+			target: column for ffill
+			partition: column for partition 
+			sort_key: column for sort
+		"""
+		window = Window.partitionBy(partition) \
+			.orderBy(sort_key) \
+			.rowsBetween(-sys.maxsize, 0)
+
+		filled_column = last(col(target), ignorenulls=True).over(window)
+
+		return filled_column
+
+	def bfill(
+		target: str,
+		partition: Union[str, List[str]],
+		sort_key: str,
+	) -> pyspark.sql.Column:
+		"""
+		backward fill
+
+		Args:
+			target: column for bfill
+			partition: column for partition 
+			sort_key: column for sort
+		"""
+		window = Window.partitionBy(partition) \
+			.orderBy(sort_key) \
+			.rowsBetween(0, sys.maxsize)
+
+		filled_column = first(col(target), ignorenulls=True).over(window)
+
+		return filled_column
+
 	# Define the function to preprocess and send the data to Kafka
 	def preprocess_and_send_to_kafka(batch_df, batch_id):
 		"""The function is fed into foreachBatch of a writestream.
@@ -61,8 +111,21 @@ def main():
 		# An example of the new key is "p000194_SpO2"
 		# The "value" here will be an array containing one value of SpO2 of the patient.
 		# .agg(avg("value").alias("average")) \
+
+		batch_df = batch_df\
+    	.withColumn(
+			"average2",
+			ffill(target="average", partition=["key", "channel"], sort_key="windowStart")
+		)\
+		.withColumn(
+			"average3",
+			bfill(target="average2", partition=["key", "channel"], sort_key="windowStart")
+		)\
+		.fillna(0)
+		
+
 		preprocessed_df = batch_df.groupby("key","channel")\
-			.agg(to_json(collect_list("average")).alias("value")) \
+			.agg(to_json(collect_list("average3")).alias("value")) \
 			.selectExpr(
 			'concat(key, "_", channel) as key',
 			'value'
@@ -138,8 +201,7 @@ def main():
 								"CAST(REPLACE(replace(substring_index(CAST(value as STRING), ',' ,1),'[',''), '\"', '')  AS INT) as channel",
 								"CAST(replace(substring_index(CAST(value as STRING), ',' ,-1),']','') as FLOAT) as value",
 								# "date_format(timestamp,'HH:mm:ss') as time",
-								"CAST(timestamp as TIMESTAMP) as timestamp")\
-					.fillna(0) 
+								"CAST(timestamp as TIMESTAMP) as timestamp")
 
 		# low-pass filtering over l=3 mins 
 		# In the actual case, each window has a duration of 3 minutes. The interval between each window is 5 seconds interval.
@@ -153,7 +215,7 @@ def main():
 		.selectExpr(
 			"key"
 			,"channel"
-			# ,"window.start"
+			,"window.start as windowStart"
 			# ,"window.end"
 			,'average'
 		)
