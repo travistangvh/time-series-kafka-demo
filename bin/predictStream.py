@@ -117,12 +117,13 @@ def write_to_mysql(batch_df, batch_id):
 					# If signal has less than 120 items, we need to wait until it has enough items.
 					if signal.shape[0] < 120:
 						logger.info(f"Waiting until there are 120 signals. Now it only has {signal.shape[0]}")
-						logger.info(f"Signal: {signal}")
+						logger.info(f"Signal for {pid} for signal {cfg['CHANNEL_NAMES'][d[signal_index]]}: {signal}")
 						return
 					
 					# If signal has at least 120 items, we truncate it to 120 items.
 					if signal.shape[0] >= 120:
 						logger.info(f"You need to make sure that there are 120 signals!! Now it has {signal.shape[0]}")
+						logger.info(f"Signal for {pid} for signal {cfg['CHANNEL_NAMES'][d[signal_index]]}: {signal}")
 						signal = signal[:120]
 
 				# If signal is not present at all, we create a numpy array of zeros.		

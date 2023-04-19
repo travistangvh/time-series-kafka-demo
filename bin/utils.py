@@ -34,6 +34,7 @@ def get_global_config():
 			"WINDOWSIZE": config.getint("SETTINGS", "WINDOWSIZE"),
 			"RECORDOVERLAP": config.getfloat("SETTINGS", "RECORDOVERLAP"),
 			"BATCHSIZE": config.getint("SETTINGS", "BATCHSIZE"),
+			"PATIENTRECORDS": config.get("SETTINGS", "PATIENTRECORDS").split(", ")
 			}
 		
 	elif platform == "darwin":
@@ -53,7 +54,8 @@ def get_global_config():
 			"CHANNEL_NAMES": config.get("SETTINGS", "CHANNEL_NAMES").split(", "),
 			"WINDOWSIZE": config.getint("SETTINGS", "WINDOWSIZE"),
 			"RECORDOVERLAP": config.getfloat("SETTINGS", "RECORDOVERLAP"),
-			"BATCHSIZE": config.getint("SETTINGS", "BATCHSIZE")
+			"BATCHSIZE": config.getint("SETTINGS", "BATCHSIZE"),
+			"PATIENTRECORDS": config.get("SETTINGS", "PATIENTRECORDS").split(", ")
 		}
 		
 	elif platform == "win32":

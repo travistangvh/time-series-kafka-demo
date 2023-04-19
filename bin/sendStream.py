@@ -69,7 +69,7 @@ def main():
             producer.flush()
             time.sleep(diff/args.speed)
 
-    record_id_arr = ['p044083-2112-05-04-19-50n','p000194-2112-05-23-14-34n'] # Start the server in a separate thread
+    record_id_arr = cfg['PATIENTRECORDS'] # Start the server in a separate thread
     thread_list = [Thread(target=send_record_data, args = [record]) for record in record_id_arr]
     for thread in thread_list:
         thread.start()

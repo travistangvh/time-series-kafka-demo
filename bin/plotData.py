@@ -76,7 +76,8 @@ def main():
 	del producer_conf['bootstrap.servers']
 
 	# Hardcoding patients to be displayed
-	patient_arr = ['p000194','p044083']
+	# patient_arr = ['p000194','p044083','p046651']
+	patient_arr = [record[0:7] for record in cfg['PATIENTRECORDS']]
 
 	# Function that creates the Bokeh application and define its apperance
 	def start_server():
@@ -174,7 +175,7 @@ def main():
 			def update_data():
 				global tabs_d
 				
-				# Retrieve waveform data from Streaming
+				# Retrieve waveform data from Streaming (sendstream kafka topic)
 				for pid in patient_arr:
 					for channel_index, _ in enumerate(cfg['CHANNEL_NAMES']):
 						mutex.acquire()
