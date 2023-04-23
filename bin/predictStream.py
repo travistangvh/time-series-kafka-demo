@@ -117,13 +117,15 @@ def write_to_mysql(batch_df, batch_id):
 					# If signal has less than 120 items, we need to wait until it has enough items.
 					if signal.shape[0] < 120:
 						logger.info(f"Waiting until there are 120 signals. Now it only has {signal.shape[0]}")
-						logger.info(f"Signal for {pid} for signal {cfg['CHANNEL_NAMES'][d[signal_index]]}: {signal}")
+						logger.info(f"{cfg['CHANNEL_NAMES']}")
+						logger.info(f"{d[signal_index]}")
+						#logger.info(f"Signal for {pid} for signal {cfg['CHANNEL_NAMES'][signal_index]}: {signal}")
 						return
 					
 					# If signal has at least 120 items, we truncate it to 120 items.
 					if signal.shape[0] >= 120:
 						logger.info(f"You need to make sure that there are 120 signals!! Now it has {signal.shape[0]}")
-						logger.info(f"Signal for {pid} for signal {cfg['CHANNEL_NAMES'][d[signal_index]]}: {signal}")
+						#logger.info(f"Signal for {pid} for signal {cfg['CHANNEL_NAMES'][signal_index]}: {signal}")
 						signal = signal[:120]
 
 				# If signal is not present at all, we create a numpy array of zeros.		
@@ -248,10 +250,10 @@ def main():
 		# In the actual case, each window has a duration of 600 seconds. The interval between each window is 60 seconds.
 		# We take a window of 600 seconds (10 minutes) and slide it every 60 seconds.
 		# Within 10 minutes, we would have accumulated 120 data points for each signal.
-		base_df = base_df.withWatermark("timestamp", f'{int(10/args.speed)} seconds') \
+		base_df = base_df.withWatermark("timestamp", f'{(10/args.speed)} seconds') \
 		.groupBy(
 			base_df.patientid,
-			window("timestamp", f'{int(600/args.speed)} seconds', f'{int(60/args.speed)} seconds')
+			window("timestamp", f'{(600/args.speed)} seconds', f'{(60/args.speed)} seconds')
 			) \
 		.agg(to_json(struct(collect_list("channel").alias("channel"),collect_list("parsed").alias("lst"))).alias("value2")) \
 			.selectExpr(
@@ -263,7 +265,7 @@ def main():
 		
 		# Write the streaming data to MySQL using foreachBatch.
 		# This sends the data to the model every 60 seconds.
-		query = base_df.writeStream.foreachBatch(write_to_mysql).trigger(processingTime=f'{int(60/args.speed)} seconds').start()
+		query = base_df.writeStream.foreachBatch(write_to_mysql).trigger(processingTime=f'{(60/args.speed)} seconds').start()
 		
 		# Uncomment the following line in order to print the streaming data to console
 		# query = base_df.writeStream.outputMode("append").format("console").option("truncate", "false").trigger(processingTime='10 seconds').start()
