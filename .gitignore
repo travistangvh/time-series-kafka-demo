@@ -161,4 +161,10 @@ MyCNN2.pth
 wget-log.*
 /wget-log
 !patients_waveform.csv
-!
+!/Users/michaelscott/bd4h/project/streaming-env/time-series-kafka-demo/bin/explore_fantasia copy.ipynb
+!/Users/michaelscott/bd4h/project/streaming-env/time-series-kafka-demo/bin/explore_fantasia.ipynb
+!/Users/michaelscott/bd4h/project/streaming-env/time-series-kafka-demo/bin/explore_torch copy.ipynb
+!/Users/michaelscott/bd4h/project/streaming-env/time-series-kafka-demo/bin/download.py
+!/Users/michaelscott/bd4h/project/streaming-env/time-series-kafka-demo/bin/plot.ipynb
+!/Users/michaelscott/bd4h/project/streaming-env/time-series-kafka-demo/bin/mock-stream.py
+!/Users/michaelscott/bd4h/project/streaming-env/time-series-kafka-demo/explore_output/PATIENT_ENDTIME/.part-00000-a87c09a1-5b72-4e99-aefa-ad59ac298722-c000.csv.crc

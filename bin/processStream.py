@@ -110,7 +110,6 @@ def main():
 		# Create a new key in the format of "patientid_channelname". 
 		# An example of the new key is "p000194_SpO2"
 		# The "value" here will be an array containing one value of SpO2 of the patient.
-		# .agg(avg("value").alias("average")) \
 
 		batch_df = batch_df\
     	.withColumn(
@@ -130,10 +129,6 @@ def main():
 			'concat(key, "_", channel) as key',
 			'value'
 		)
-
-		# Logging for debugging purpose
-		# logger.info(f'processed len: {preprocessed_df.count()}')
-		# logger.info(f'processed: {preprocessed_df.collect()}')
 
 		# This is how preprocessed_df looks like:
 		# time-series-kafka-demo-processstream-1  | +--------------------+-------+
@@ -160,9 +155,7 @@ def main():
 		# time-series-kafka-demo-processstream-1  | |        p000194_ST V|  [0.5]|
 		# time-series-kafka-demo-processstream-1  | |    p000194_NBP Mean|  [0.0]|
 		# time-series-kafka-demo-processstream-1  | +--------------------+-------+
-		# if preprocessed_df.count()>0:
-		# 	logger.info(preprocessed_df.collect())
-		# 	raise Exception
+
 		# Send the preprocessed data to Kafka
 		preprocessed_df.write.format("kafka")\
 			.options(**producer_conf)\
@@ -173,12 +166,6 @@ def main():
 
 		# For debugging: We can stop the streaming query after a certain number of batches.
 		logger.info(f'batch_id: {batch_id}')
-
-		
-
-		# if batch_id >= 10:
-		# 	print("Stopping the streaming query...")
-		# 	raise Exception
 
 	def msg_process(server, topics):
 		"""Create a streaming dataframe that takes in values of messages received, 

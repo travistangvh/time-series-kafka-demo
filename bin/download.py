@@ -2,7 +2,7 @@ import subprocess
 # Bringing this elsewhere to run
 # patients_w_waveform = [41031, 42995, 46651, 57321, 58505, 66093, 68808, 74711, 79096,  81694, 93360, 94255]
 
-patients_w_waveform = [57321,  93360, 58505, 74711]
+patients_w_waveform = [93360]#[58505, 74711] # 93360 downloading
 # Download the waveform file of all patients in matched dataset
 cmd = "ls "
 idx = 0

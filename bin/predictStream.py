@@ -59,7 +59,6 @@ def write_to_mysql(batch_df, batch_id):
 	batch_df = batch_df.withColumn("v_parsed",from_json(col("value2").cast("string"), "struct<channel:array<int>,lst:array<array<double>>>"))
 	
 	# Select only the relevant columns from batch_df 
-	# To do: select only relevant columns so collect is faster.
 	batch_df = batch_df.select("patientid", "start_time", "end_time", "v_parsed")
 
 	collected = batch_df.collect()
@@ -71,9 +70,10 @@ def write_to_mysql(batch_df, batch_id):
 	for row in collected:
 		if all(field is None for field in row):
 			# Ignore empty row
-			logger.info("Row is empty")
+			# logger.info("Row is empty")
+			pass
 		else:
-			logger.info("Row is not empty")
+			# logger.info("Row is not empty")
 		
 			pid = int(row.patientid[1:])
 			start_time = row.start_time
@@ -84,7 +84,7 @@ def write_to_mysql(batch_df, batch_id):
 								# together with channel, we can read that the first signal of HR is 0.1, 0.2, followed by 0.5,0.3 , the first signal of pulse is 0.2, 0.4, etc.
 								# There are as many items in lst as there are signals in channel.
 
-			logger.info(f"row start time {start_time} endtime {end_time} lst_length {len(lst)}")
+			# logger.info(f"row start time {start_time} endtime {end_time} lst_length {len(lst)}")
 
 			# Flatten list of list
 			# logger.info(v_parsed)
@@ -117,15 +117,13 @@ def write_to_mysql(batch_df, batch_id):
 					# If signal has less than 120 items, we need to wait until it has enough items.
 					if signal.shape[0] < 120:
 						logger.info(f"Waiting until there are 120 signals. Now it only has {signal.shape[0]}")
-						logger.info(f"{cfg['CHANNEL_NAMES']}")
-						logger.info(f"{d[signal_index]}")
-						#logger.info(f"Signal for {pid} for signal {cfg['CHANNEL_NAMES'][signal_index]}: {signal}")
+						# logger.info(f"Signal for {pid} for signal {cfg['CHANNEL_NAMES'][d[signal_index]]}: {signal}")
 						return
 					
 					# If signal has at least 120 items, we truncate it to 120 items.
 					if signal.shape[0] >= 120:
 						logger.info(f"You need to make sure that there are 120 signals!! Now it has {signal.shape[0]}")
-						#logger.info(f"Signal for {pid} for signal {cfg['CHANNEL_NAMES'][signal_index]}: {signal}")
+						# logger.info(f"Signal for {pid} for signal {cfg['CHANNEL_NAMES'][d[signal_index]]}: {signal}")
 						signal = signal[:120]
 
 				# If signal is not present at all, we create a numpy array of zeros.		
@@ -163,10 +161,7 @@ def write_to_mysql(batch_df, batch_id):
 				y_pred = y.round().long().numpy().tolist()[0]
 				y_prob = y.numpy().tolist()[0]
 			
-			logger.info(f"y_pred: {y_pred}")
-			logger.info(f"y_prob: {y_prob}")
-			logger.info(f"pid: {pid}")
-			logger.info(f"start_time: {start_time}")
+			logger.info(f"Made prediction for {pid} at {start_time} with a riskscore of {y_pred}")
 
 			# Store the data
 			# data = [tuple([str(pid), str(start_time), str(y_prob), str(y_prob)])]
@@ -197,7 +192,7 @@ def write_to_mysql(batch_df, batch_id):
 				logger.info(f"Error: {e}")
 
 		# For debugging: We can stop the streaming query after a certain number of batches.
-		logger.info(f'batch_id: {batch_id}')
+		# logger.info(f'batch_id: {batch_id}')
 		# if batch_id >= 10:
 		# 	print("Stopping the streaming query...")
 		# 	raise Exception
