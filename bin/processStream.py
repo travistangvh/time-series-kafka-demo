@@ -206,11 +206,11 @@ def main():
 		# low-pass filtering over l=3 mins 
 		# In the actual case, each window has a duration of 3 minutes. The interval between each window is 5 seconds interval.
 		# This gives one data point. 
-		base_df = base_df.withWatermark("timestamp", f'{int(10/args.speed)} seconds') \
+		base_df = base_df.withWatermark("timestamp", f'{(10/args.speed)} seconds') \
 		.groupBy(
 			base_df.key,
 			base_df.channel, 
-			window("timestamp", f"{int(180/args.speed)} seconds", f'{int(5/args.speed)} seconds')) \
+			window("timestamp", f"{(180/args.speed)} seconds", f'{(5/args.speed)} seconds')) \
 		.agg(avg("value").alias("average")) \
 		.selectExpr(
 			"key"
@@ -224,7 +224,7 @@ def main():
 		# The sliding window is 5 seconds. This means that we are obtaining the average of the last 3 minutes every 5 seconds.
 		# Thus, with the passing of 60 seconds, we would have accumulated 60/5=12 additional data points.
 		# Since the trigger is 60 seconds, we will be sending 12 data points every time the trigger is pushed.
-		kafka_writer: DataStreamWriter = base_df.writeStream.foreachBatch(preprocess_and_send_to_kafka).trigger(processingTime=f'{int(60/args.speed)} seconds')
+		kafka_writer: DataStreamWriter = base_df.writeStream.foreachBatch(preprocess_and_send_to_kafka).trigger(processingTime=f'{(60/args.speed)} seconds')
 
 		kafka_query: StreamingQuery = kafka_writer.start()
 		
