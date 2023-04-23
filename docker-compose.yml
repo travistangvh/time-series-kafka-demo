@@ -50,8 +50,14 @@ services:
       - '$PWD/jars:/root/.ivy2/jars'
     ports:
       - '9042:9042'
+      - '8080:8080'
+      - '4040:4040'
+      - '9870:9870'
+      - '8088:8088'
+      - '8042:8042'
     depends_on:
       - kafka
+      - deeplearning
     restart: on-failure
     networks:
       datapipeline:
@@ -67,7 +73,9 @@ services:
     ports:
       - '5068:5068'
     depends_on:
-      - kafka
+      #- kafka
+      db:
+        condition: service_healthy
     restart: on-failure
     networks:
       datapipeline:
@@ -76,15 +84,16 @@ services:
   sendstream:
     image: btctothemoonz/travisnkento:0.0.8
     command: >
-      bash -c "cd ../volume && python bin/sendStream.py --speed 1"
+      bash -c "cd ../volume && python bin/sendStream.py --speed 1 --frequency 1"
     volumes:
       - '$PWD:/volume' #so it turns out this line is causing the problem before. 
                       #previously, all the "home" is replaced because of the conflict in name
       - '$PWD/jars:/root/.ivy2/jars'
-    ports:
-      - '8080:8080'
-    # depends_on:
-    #   - processstream
+    #ports:
+    #  - '8080:8080'
+    depends_on:
+      - kafka
+      - processstream
     restart: on-failure
     networks:
       datapipeline:
@@ -98,10 +107,11 @@ services:
       - '$PWD:/volume'
       - '$PWD/jars:/root/.ivy2/jars'
     ports:
-      - '8081:8081'
+      - '4041:4040'
     depends_on:
     #   - processstream
-      - db
+      db:
+        condition: service_healthy
     restart: on-failure
     networks:
       datapipeline:
@@ -125,6 +135,9 @@ services:
     networks:
       datapipeline:
         ipv4_address: 172.18.0.8
+    healthcheck:
+      test: ["CMD", 'mysqladmin', 'ping', '-h', 'localhost', '-u', 'root', '-p$$MYSQL_ROOT_PASSWORD' ]
+      timeout: 30s
 
 volumes:
   db:
