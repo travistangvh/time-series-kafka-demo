@@ -32,6 +32,8 @@ def main():
                         help='List of the Kafka topic to receive unprocessed data.')
     parser.add_argument('--speed', type=float, default=1, required=False,
                         help='Speed up time series by a given multiplicative factor.')
+    parser.add_argument('--frequency', type=float, default=1, required=False,
+                        help='Speed up time series by a given multiplicative factor.')
     args = parser.parse_args()
 
     def send_record_data(record_id):
@@ -44,7 +46,7 @@ def main():
         record = wfdb.rdrecord(patient_path, channel_names=cfg["CHANNEL_NAMES"])
         record_arr = record.__dict__['p_signal'] # Get one of the signals
         record_sig = record.__dict__['sig_name'] # signal list
-        frequency = record.fs # sampling frequency in 1/s
+        frequency = record.fs*args.frequency # sampling frequency in 1/s
         diff = float(1/frequency) # waiting time in second # augmented with the speed up
 
         for val in record_arr:

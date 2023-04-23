@@ -91,7 +91,10 @@ def build_spark_session():
 		'unused-1.0.0.jar',
 		'zstd-jni-1.4.8-1.jar'
 	]])
-	return SparkSession.builder.appName('app').master('local').config('spark.jars', jars).getOrCreate()
+	return SparkSession.builder.appName('app').master('local[1]')\
+				.config('spark.jars', jars)\
+				.config("spark.ui.enabled", "true")\
+				.getOrCreate()
 
 	# #Option 2: Dynamically download file (slower but works)
 	# return SparkSession.builder.appName('app').master('local').config("spark.jars.packages", "org.apache.spark:spark-sql-kafka-0-10_2.12:3.1.2").getOrCreate()
