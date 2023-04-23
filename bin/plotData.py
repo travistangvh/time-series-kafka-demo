@@ -32,9 +32,11 @@ import pandas as pd
 from collections import defaultdict
 import time
 
-
+"""Preparation for plotting"""
+# Set up configurations
 cfg = get_global_config()
 
+# Set up logger for debugging
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 formatter = logging.Formatter('%(asctime)s %(levelname)s %(message)s')
@@ -42,11 +44,15 @@ ch = logging.StreamHandler()
 ch.setFormatter(formatter)
 logger.addHandler(ch)
 
-# Define MySQL connection
+# Set necessary permissions
 cnx = mysql.connector.connect(user='root', 
-							  password='mauFJcuf5dhRMQrjj',
-							  host='172.18.0.8', 
-							  database='mydb')
+							password='mauFJcuf5dhRMQrjj',
+							host='172.18.0.8', 
+							database='mydb')
+cursor = cnx.cursor()
+query = "SET TRANSACTION ISOLATION LEVEL READ UNCOMMITTED;"
+cursor.execute(query)
+cnx.commit()
 
 # A mutex to synchronize access to the shared variable
 mutex = threading.Lock()
@@ -62,6 +68,9 @@ def main():
 						nargs="*",
 						default=list(map(lambda x:x.replace(" ","_"), cfg["CHANNEL_NAMES"])),
 						help='List of the Kafka topic to receive unprocessed data.')
+	parser.add_argument('--model-call-topic', 
+					type=str,
+					help='Name of the Kafka topic to receive machine learning call.')
 	parser.add_argument('--speed', type=float, default=1, required=False,
 						help='Speed up time series by a given multiplicative factor.')
 	args = parser.parse_args()
@@ -83,21 +92,21 @@ def main():
 	def start_server():
 		global tabs_d		
 		tabs_d = defaultdict(dict) 
-		# you cannot leave this outside because once you do that this item is actually 
-		# created outside but only modified inside.
-		# the changes made within this function will not be seen outside
+
 		def modify_doc(doc):
+			"""A function that creates the Bokeh application and define its apperance. 
+			It also creates the vraiables to store the data and the plots."""
 			global tabs_d
-			logger.info("User has opened http://localhost:5068/!")
+			logger.info("Thank you for going to http://localhost:5068/!")
 			
 			tabs_l = []
 			title = Div(text='<h1 style="text-align: left">Dashboard for tracking data</h1>')
 			processed_title = Div(text='<h1 style="text-align: left">Preprocessed data</h1>')
 			original_title = Div(text='<h1 style="text-align: left">Original data</h1>')
-			prediction_title = Div(text='<h1 style="text-align: left">Prediction</h1>')
-
+			
 			# Initializing data sources and plots for each patient
 			for pid in patient_arr:
+				prediction_title = Div(text=f'<h1 style="text-align: left">Risk score prediction for patient {pid}</h1>')
 				tabs_d[pid]= defaultdict(defaultdict)
 				tabs_d[pid]['new_original_sources'] = defaultdict(ColumnDataSource)
 				tabs_d[pid]['new_processed_sources'] = defaultdict(ColumnDataSource)
@@ -114,7 +123,7 @@ def main():
 									title=f'Predictions',
 									x_axis_type = "datetime",    
 										tools="pan,wheel_zoom,box_zoom,reset,save",
-										min_width=1600, 
+										min_width=1400, 
 										height=150)
 				prediction_plot.scatter('x', 'y', source=tabs_d[pid]['prediction_source'], name=f'Predictions_plot')
 
@@ -131,7 +140,7 @@ def main():
 												title=f'{channel_name}',
 												x_axis_type = "datetime",    
 													tools="pan,wheel_zoom,box_zoom,reset,save",
-													min_width=800, 
+													min_width=700, 
 													height=150)
 					# Add original data
 					a = tabs_d[pid]['original_plots'][channel_index].scatter('x', 'y', 
@@ -142,24 +151,13 @@ def main():
 																			title=f'{channel_name}',
 																			x_axis_type = "datetime",    
 																				tools="pan,wheel_zoom,box_zoom,reset,save",
-																				min_width=800, 
+																				min_width=700, 
 																				height=150)
 					# Add Processed data (No data for now)
 					b = tabs_d[pid]['processed_plots'][channel_index].scatter('x', 'y', 
 																			source=tabs_d[pid]['processed_sources'][channel_index], 
 																			name=f'{channel_name}_plot', fill_color='red')
 				
-					# display legend in top left corner (default is top right corner)
-					# plots[channel_index].legend.location = "top_left"
-
-					# Add legends (https://stackoverflow.com/questions/26254619/position-of-the-legend-in-a-bokeh-plot)
-					# tabs_d[pid]['legends_d'][channel_index] = Legend(items=[
-					# 	("Original",   [a]),
-					# 	("Processed", [b])
-					# ], location=(0, -30))
-
-					# tabs_d[pid]['plots'][channel_index].add_layout(tabs_d[pid]['legends_d'][channel_index],'right')
-
 					# Add the plot to a Column model
 					original_column.children.append(tabs_d[pid]['original_plots'][channel_index])
 					processed_column.children.append(tabs_d[pid]['processed_plots'][channel_index])
@@ -173,6 +171,7 @@ def main():
 				tabs_l.append(TabPanel(child=combined_tab, title=str(pid)))
 
 			def update_data():
+				"""A function that updates the data in the raw and processed data data sources and the plots."""
 				global tabs_d
 				
 				# Retrieve waveform data from Streaming (sendstream kafka topic)
@@ -187,26 +186,37 @@ def main():
 						tabs_d[pid]['new_original_sources'][channel_index] = {'x': [], 'y': []}
 						mutex.release()
 
-				# Read prediction data from MySQL (These are generated from the streaming data.)
+			def update_predictions():
+				"""A function that updates the data in the prediction data source and the plot."""
+
+				# Define MySQL connection
+				cnx = mysql.connector.connect(user='root', 
+											password='mauFJcuf5dhRMQrjj',
+											host='172.18.0.8', 
+											database='mydb')
 				cursor1 = cnx.cursor()
-				query1 = "SELECT SUBJECT_ID, PRED_TIME, RISK_SCORE FROM predictions WHERE DATE(PRED_TIME)>= CURRENT_DATE ORDER BY PRED_TIME"
+				query1 = "SELECT SUBJECT_ID, PRED_TIME, RISK_SCORE FROM predictions where date(pred_time) >= current_date ORDER BY PRED_TIME DESC"
 				cursor1.execute(query1)
 				rows1 = cursor1.fetchall()
 
 				for row in rows1:
-					# logger.info(f'Rows from predictions:{rows1}')
+					# logger.info(f'Rows from predictions:{row}')
 					pid = f'p{row[0]:0>6}'
 					pred_time = row[1]
 					risk_score = row[2]
 					
+					# Add prediction data to the plot
 					mutex.acquire()
-					if not pred_time in tabs_d[pid]['prediction_source'].data['x']:
-						tabs_d[pid]['prediction_source'].stream({'x':[pred_time], 'y':[risk_score]})
-						logger.info(f"Streaming {pred_time}|{risk_score}.")
-					mutex.release()
+					tabs_d[pid]['prediction_source'].stream({'x':[pred_time], 'y':[risk_score]})
+					mutex.release() 
+
+					# logger.info(f"Streaming {pred_time}|{risk_score}.")
 				
-			# Add a periodic callback to update the plot every second
+			# Add a periodic callback to update the raw and processed data every second
 			doc.add_periodic_callback(update_data, 1000)
+
+			# Add a periodic callback to update the prediction data every 10 seconds
+			doc.add_periodic_callback(update_predictions, 10000)
 
 			doc.add_root(Tabs(tabs=tabs_l))
 
@@ -217,36 +227,31 @@ def main():
 		app = Application(FunctionHandler(modify_doc))
 		server = Server({'/': app}, port=5068) # it is crucial to set port=5068, otherwise it will not work
 
-		# Start server (non blocking)
+		# Start the Bokeh server 
 		server.start()
 		logger.info("Please manually start a browser http://localhost:5068/ else the server will not work.")
 
-		# Start the server (This is a blocking call)
+		# Start the IO Loop 
 		IOLoop.current().start()
 		
 		# Any code after this will not be executed
 		# logger.info("ended server")
 
 	# Define the function to preprocess and send the data to Kafka
-	def plot_data(batch_df, batch_id):
-		"""The function reads in data from sendstream and sends it to Bokeh"""
+	"""The function reads in data from sendstream and sends it to Bokeh"""
+	def send_raw_data_to_bokeh(batch_df, batch_id):
 
 		global tabs_d
 
-		# Ensuring that the shared varaible can be read.
-		mutex.acquire()
-		# print(tabs_d)
-		mutex.release()
-		
 		# Collect the data
 		collected = batch_df.collect()
 
-		logger.info(f"plotData batchid: {batch_id}")
+		# logger.info(f"send_raw_data_to_bokeh raw batchid: {batch_id}")
 
 		# Iterating through all rows
 		for row in collected:
 			if row.timestamp < datetime.datetime(2000, 1, 1, 0, 0, 0, 0):
-				# Ignore rows that do not have proper timetamp (Not sure where this is coming from.)
+				# Ignore rows that do not have proper timetamp 
 				break
 
 			# Ignore null values
@@ -255,19 +260,45 @@ def main():
 					# replace all ' in row.key
 					pid = row.key
 					
-					# logger.info(f"{pid} | {row.channel} | {[row.timestamp]} | {[row.value]}")
+					# logger.info(f"raw: {pid} | {row.channel} | {[row.timestamp]} | {[row.value]}")
 
 					# Acquire the mutex and update values
 					mutex.acquire()
 					tabs_d[row.key]['new_original_sources'][row.channel]['x'].extend([row.timestamp])
 					tabs_d[row.key]['new_original_sources'][row.channel]['y'].extend([row.value])
-					tabs_d[row.key]['new_processed_sources'][row.channel]['x'].extend([row.timestamp])
-					tabs_d[row.key]['new_processed_sources'][row.channel]['y'].extend([row.value])
 					mutex.release()
 
-			# raise Exception
+	def send_processed_data_to_bokeh(batch_df, batch_id):
+		"""The function reads in data from sendstream and sends it to Bokeh"""
 
-	def plot_with_bokeh(server, topics):
+		global tabs_d
+		
+		# Collect the data
+		collected = batch_df.collect()
+
+		logger.info(f"send_processed_data_to_bokeh batchid: {batch_id}")
+
+		# Iterating through all rows
+		for row in collected:
+			if row.timestamp < datetime.datetime(2000, 1, 1, 0, 0, 0, 0):
+				# Ignore rows that do not have proper timetamp 
+				break
+
+			# Ignore null values
+			if row.average is not None:
+				if row.average > 0.00001:
+					# replace all ' in row.key
+					pid = row.key
+					
+					# logger.info(f"preprocessed: {pid} | {row.channel} | {[row.timestamp]} | {[row.average]}")
+
+					# Acquire the mutex and update values
+					mutex.acquire()
+					tabs_d[row.key]['new_processed_sources'][row.channel]['x'].extend([row.timestamp])
+					tabs_d[row.key]['new_processed_sources'][row.channel]['y'].extend([row.average])
+					mutex.release()
+
+	def receive_raw_data(server, topics):
 		"""Create a streaming dataframe that takes in values of messages received, 
 		together with the current timestamp.
 		Then, print them out.
@@ -293,14 +324,67 @@ def main():
 								# "date_format(timestamp,'HH:mm:ss') as time",
 								"CAST(timestamp as TIMESTAMP) as timestamp")
 					
-		logger.info("Done")
+		# logger.info("Done")
 	
 		# Update every 5 seconds
-		kafka_writer: DataStreamWriter = base_df.writeStream.foreachBatch(plot_data).trigger(processingTime=f'{int(20/args.speed)} seconds')
+		kafka_writer: DataStreamWriter = base_df.writeStream.foreachBatch(send_raw_data_to_bokeh).trigger(processingTime=f'{int(20/args.speed)} seconds')
 
 		kafka_query: StreamingQuery = kafka_writer.start()
 		
 		kafka_query.awaitTermination()
+
+
+	def receive_processed_data(server, topics):
+		"""Create a streaming dataframe that takes in values of messages received, 
+		together with the current timestamp.
+		Then, print them out.
+		Then, process the message in batch
+		Reference link: https://medium.com/@aman.parmar17/handling-real-time-kafka-data-streams-using-pyspark-8b6616a3a084"""
+		global tabs_d
+		mutex.acquire()
+		print(tabs_d)
+		mutex.release()
+		df = (spark.
+				readStream
+				.format("kafka")
+				.option("kafka.bootstrap.servers", server)
+				.option("subscribe", ",".join(topics))
+				.option("startingOffsets", "latest")
+				.load()
+			)
+		
+		# Select the value and timestamp (the message is received)
+		base_df = df.selectExpr("CAST(key as STRING) as key",
+								"CAST(REPLACE(replace(substring_index(CAST(value as STRING), ',' ,1),'[',''), '\"', '')  AS INT) as channel",
+								"CAST(replace(substring_index(CAST(value as STRING), ',' ,-1),']','') as FLOAT) as value",
+								# "date_format(timestamp,'HH:mm:ss') as time",
+								"CAST(timestamp as TIMESTAMP) as timestamp")\
+					.fillna(0) 
+
+		# low-pass filtering over l=3 mins 
+		# In the actual case, each window has a duration of 3 minutes. The interval between each window is 5 seconds interval.
+		# This gives one data point. 
+		base_df = base_df.withWatermark("timestamp", f'{int(10/args.speed)} seconds') \
+		.groupBy(
+			base_df.key,
+			base_df.channel, 
+			window("timestamp", f"{int(180/args.speed)} seconds", f'{int(5/args.speed)} seconds')) \
+		.agg(avg("value").alias("average")) \
+		.selectExpr(
+			"key"
+			,"channel"
+			,"window.start as timestamp"
+			# ,"window.end"
+			,'average'
+		)
+
+		# Write the streaming data to MySQL using foreachBatch.
+		# This sends the data to the model every 60 seconds.
+		query = base_df.writeStream.foreachBatch(send_processed_data_to_bokeh).trigger(processingTime=f'{int(60/args.speed)} seconds').start()
+		
+		query.awaitTermination()
+
+		return query
 
 	# Start the Visualization Server
 	mutex.acquire()
@@ -309,14 +393,23 @@ def main():
 	mutex.release()
 
 	# Allow users 60 seconds to open up http://www.localhost:5068
-	time.sleep(60)
+	time_s = 10
+	while time_s >= 0: 
+		time.sleep(1)
+		logger.info(f"Countdown {time_s} seconds: Please manually start a browser http://localhost:5068/ else the server will crash.")
+		time_s-=1
 
-	# Start the thread that plots the data with Bokeh
-	plot_thread = Thread(target=plot_with_bokeh, args=(consumer_conf['bootstrap.servers'], args.signal_list))
-	plot_thread.start()
+	# Start the thread that plots the raw data with Bokeh
+	raw_plot_thread = Thread(target=receive_raw_data, args=(consumer_conf['bootstrap.servers'], args.signal_list))
+	raw_plot_thread.start()
+
+	# Start the thread that plots the processed data with Bokeh
+	processed_plot_thread = Thread(target=receive_processed_data, args=(consumer_conf['bootstrap.servers'], args.signal_list))
+	processed_plot_thread.start()
 
 	server_thread.join()
-	plot_thread.join()
+	raw_plot_thread.join()
+	processed_plot_thread.join()
 	
 if __name__ == "__main__":
 	main()

@@ -60,7 +60,7 @@ services:
   plotstream:
     image: btctothemoonz/travisnkento:0.0.8
     command: >
-      bash -c "cd ../volume && python bin/plotData.py --speed 1"
+      bash -c "cd ../volume && python bin/plotData.py --model-call-topic call-stream --speed 1"
     volumes:
       - '$PWD:/volume'
       - '$PWD/jars:/root/.ivy2/jars'
