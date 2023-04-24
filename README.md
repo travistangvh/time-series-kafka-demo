@@ -7,6 +7,8 @@ In the video below, you can see the output from the User Interface, which receiv
 - preprocessed streaming data, 
 - the prediction from the ML model.
 
+We also have an presentation for this project.
+[![Streaming Data Pipeline and ML Model with Kafka and PyTorch (A CSE6250 Project)](https://img.youtube.com/vi/R6znyW2okTg/0.jpg)](https://youtu.be/R6znyW2okTg "Streaming Data Pipeline and ML Model with Kafka and PyTorch (A CSE6250 Project)")
 # Authors
 - [Travis Tang](https://www.linkedin.com/in/travistang)
 - [Kento Ohtani](https://jp.linkedin.com/in/kento-ohtani-67385a148)
