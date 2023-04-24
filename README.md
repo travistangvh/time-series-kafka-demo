@@ -7,6 +7,8 @@ In the video below, you can see the output from the User Interface, which receiv
 - preprocessed streaming data, 
 - the prediction from the ML model.
 
+https://user-images.githubusercontent.com/33159785/233902350-1043a06a-7ef1-4a2e-a3e0-a05305e5093f.mp4
+
 # Authors
 - [Travis Tang](https://www.linkedin.com/in/travistang)
 - [Kento Ohtani](https://jp.linkedin.com/in/kento-ohtani-67385a148)
