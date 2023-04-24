@@ -2,14 +2,15 @@ Streaming Data Pipeline and ML Model with Kafka and PyTorch (A CSE6250 Project)
 ============
 
 # Demo
-In the video below, you can see the output from the User Interface, which receives and displays in real time the following signals:
+In the video below (playing at 32x speed), you can see the output from the User Interface, which receives and displays in real time the following signals:
 - raw streaming data
 - preprocessed streaming data, 
 - the prediction from the ML model.
 
 https://user-images.githubusercontent.com/33159785/233902350-1043a06a-7ef1-4a2e-a3e0-a05305e5093f.mp4
 
-We also have an presentation for this project.
+Here is the presentation for this project:
+
 [![Streaming Data Pipeline and ML Model with Kafka and PyTorch (A CSE6250 Project)](https://img.youtube.com/vi/R6znyW2okTg/0.jpg)](https://youtu.be/R6znyW2okTg "Streaming Data Pipeline and ML Model with Kafka and PyTorch (A CSE6250 Project)")
 
 # Authors
